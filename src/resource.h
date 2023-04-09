@@ -23,12 +23,12 @@
 
 
 #define MEMENTRY_STATE_END_OF_MEMLIST 0xFF
-#define MEMENTRY_STATE_NOT_NEEDED 0 
+#define MEMENTRY_STATE_NOT_NEEDED 0
 #define MEMENTRY_STATE_LOADED 1
 #define MEMENTRY_STATE_LOAD_ME 2
 
 /*
-    This is a directory entry. When the game starts, it loads memlist.bin and 
+    This is a directory entry. When the game starts, it loads memlist.bin and
 	populate and array of MemEntry
 */
 struct MemEntry {
@@ -64,7 +64,7 @@ struct Resource {
 	enum ResType {
 		RT_SOUND  = 0,
 		RT_MUSIC  = 1,
-		RT_POLY_ANIM = 2, // full screen video buffer, size=0x7D00 
+		RT_POLY_ANIM = 2, // full screen video buffer, size=0x7D00
 
 		// FCS: 0x7D00=32000...but 320x200 = 64000 ??
 		// Since the game is 16 colors, two pixels palette indices can be stored in one byte
@@ -75,12 +75,12 @@ struct Resource {
 		RT_BYTECODE = 4,
 		RT_POLY_CINEMATIC   = 5
 	};
-	
+
 	enum {
 		MEM_BLOCK_SIZE = 600 * 1024   //600kb total memory consumed (not taking into account stack and static heap)
 	};
-	
-	
+
+
 	Video *video;
 	const char *_dataDir;
 	MemEntry _memList[150];
@@ -95,17 +95,19 @@ struct Resource {
 	uint8_t *_segVideo2;
 
 	Resource(Video *vid, const char *dataDir);
-	
+
 	void readBank(const MemEntry *me, uint8_t *dstBuf);
 	void readEntries();
 	void loadMarkedAsNeeded();
 	void invalidateAll();
-	void invalidateRes();	
+	void invalidateRes();
 	void loadPartsOrMemoryEntry(uint16_t num);
 	void setupPart(uint16_t ptrId);
 	void allocMemBlock();
 	void freeMemBlock();
-	
+
+  void loadDump(const char *f);
+
 	void saveOrLoad(Serializer &ser);
 };
 

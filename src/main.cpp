@@ -21,7 +21,7 @@
 #include "util.h"
 
 
-static const char *USAGE = 
+static const char *USAGE =
 	"Raw - Another World Interpreter\n"
 	"Usage: raw [OPTIONS]...\n"
 	"  --datapath=PATH   Path to where the game is installed (default '.')\n"
@@ -62,9 +62,9 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	//FCS
-	//g_debugMask = DBG_INFO; // DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND
-	//g_debugMask = 0 ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
-	
+	// g_debugMask = DBG_INFO | DBG_VM | DBG_VIDEO; // DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND
+	g_debugMask = 0 ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
+
 	Engine* e = new Engine(stub, dataPath, savePath);
 	e->init();
 	e->run();
@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
    Game was originally made with 16. SIXTEEN colors. Running on 320x200 (64,000 pixels.)
 
    Great fan site here: https://sites.google.com/site/interlinkknight/anotherworld
-   Contains the wheelcode :P ! 
+   Contains the wheelcode :P !
 
    A lot of details can be found regarding the game and engine architecture at:
    http://www.anotherworld.fr/anotherworld_uk/another_world.htm
@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
    main
    {
-       
+
        Engine *e = new Engine();
 	   e->run()
 	   {
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
 		  setup();
 	      vm.restartAt(0x3E80); // demo starts at 0x3E81
 
-	     while (!_stub->_pi.quit) 
+	     while (!_stub->_pi.quit)
 		 {
 		   vm.setupScripts();
 		   vm.inp_updatePlayer();
@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 	     }
 
 	     finish();
-	     
+
 	   }
    }
 
@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
 	   Mixing is done on software.
 
 	   Since the virtal machine and SDL are running simultaneously in two different threads:
-	   Any read or write to an elements of the sound channels MUST be synchronized with a 
+	   Any read or write to an elements of the sound channels MUST be synchronized with a
 	   mutex.
 
    Endianess:
@@ -228,7 +228,7 @@ int main(int argc, char *argv[]) {
     - a pure screenspace sequence of points: I call those screenspace polygons.
 	- a list of delta to add or substract to the first vertex. I call those: objectspace polygons.
 
-   Video : 
+   Video :
    =======
 
    Q: Why 4 framebuffer ?
@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
 
 
    	// I am almost sure that:
-	// _curPagePtr1 is the backbuffer 
+	// _curPagePtr1 is the backbuffer
 	// _curPagePtr2 is the frontbuffer
 	// _curPagePtr3 is the background builder.
 

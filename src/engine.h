@@ -21,8 +21,10 @@
 
 #include "intern.h"
 #include "vm.h"
+#if 0
 #include "mixer.h"
 #include "sfxplayer.h"
+#endif
 #include "resource.h"
 #include "video.h"
 
@@ -35,9 +37,11 @@ struct Engine {
 
 	System *sys;
 	VirtualMachine vm;
-	Mixer mixer;
 	Resource res;
+#if 0
+	Mixer mixer;
 	SfxPlayer player;
+#endif
 	Video video;
 	const char *_dataDir, *_saveDir;
 	uint8_t _stateSlot;
@@ -49,7 +53,7 @@ struct Engine {
 	void init();
 	void finish();
 	void processInput();
-	
+
 	void makeGameStateName(uint8_t slot, char *buf);
 	void saveGameState(uint8_t slot, const char *desc);
 	void loadGameState(uint8_t slot);

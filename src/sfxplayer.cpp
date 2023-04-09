@@ -96,10 +96,12 @@ void SfxPlayer::prepareInstruments(const uint8_t *p) {
 }
 
 void SfxPlayer::start() {
+#if 0
 	debug(DBG_SND, "SfxPlayer::start()");
 	MutexStack(sys, _mutex);
 	_sfxMod.curPos = 0;
-	_timerId = sys->addTimer(_delay, eventsCallback, this);			
+	_timerId = sys->addTimer(_delay, eventsCallback, this);
+#endif
 }
 
 void SfxPlayer::stop() {
@@ -171,7 +173,7 @@ void SfxPlayer::handlePattern(uint8_t channel, const uint8_t *data) {
 					m -= volume;
 					if (m < 0) {
 						m = 0;
-					}	
+					}
 				}
 				mixer->setChannelVolume(channel, m);
 				pat.sampleVolume = m;

@@ -85,6 +85,7 @@ void SDLStub::setPalette(const uint8_t *p) {
   {
     uint8_t c1 = *(p + 0);
     uint8_t c2 = *(p + 1);
+	  // debug(DBG_VM, "-- color %d: %02x%02x", i, c2,c1);
     palette[i].r = (((c1 & 0x0F) << 2) | ((c1 & 0x0F) >> 2)) << 2; // r
     palette[i].g = (((c2 & 0xF0) >> 2) | ((c2 & 0xF0) >> 6)) << 2; // g
     palette[i].b = (((c2 & 0x0F) >> 2) | ((c2 & 0x0F) << 2)) << 2; // b
@@ -224,7 +225,7 @@ void SDLStub::sleep(uint32_t duration) {
 }
 
 uint32_t SDLStub::getTimeStamp() {
-	return SDL_GetTicks();	
+	return SDL_GetTicks();
 }
 
 void SDLStub::startAudio(AudioCallback callback, void *param) {
@@ -302,4 +303,3 @@ void SDLStub::switchGfxMode() {
 
 SDLStub sysImplementation;
 System *stub = &sysImplementation;
-

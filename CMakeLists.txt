@@ -24,8 +24,8 @@ add_executable(raw
         src/vm.cpp
 )
 
-find_package(SDL2 REQUIRED)
-include_directories(${SDL2_INCLUDE_DIRS})
-target_link_libraries(raw ${SDL2_LIBRARIES})
-target_link_libraries(raw z)
+add_subdirectory(SDL)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/SDL/include)
 
+target_link_libraries(raw SDL2)
+target_link_libraries(raw z)

@@ -29,7 +29,7 @@
 
 enum ScriptVars {
 		VM_VARIABLE_RANDOM_SEED          = 0x3C,
-		
+
 		VM_VARIABLE_LAST_KEYCHAR         = 0xDA,
 
 		VM_VARIABLE_HERO_POS_UP_DOWN     = 0xE5,
@@ -45,10 +45,12 @@ enum ScriptVars {
 		VM_VARIABLE_PAUSE_SLICES         = 0xFF
 	};
 
+#if 0
 struct Mixer;
+struct SfxPlayer;
+#endif
 struct Resource;
 struct Serializer;
-struct SfxPlayer;
 struct System;
 struct Video;
 
@@ -71,9 +73,11 @@ struct VirtualMachine {
 	//This table is used to play a sound
 	static const uint16_t frequenceTable[];
 
+#if 0
 	Mixer *mixer;
-	Resource *res;
 	SfxPlayer *player;
+#endif
+	Resource *res;
 	Video *video;
 	System *sys;
 
@@ -81,8 +85,8 @@ struct VirtualMachine {
 	uint16_t _scriptStackCalls[VM_NUM_THREADS];
 	uint16_t threadsData[NUM_DATA_FIELDS][VM_NUM_THREADS];
 
-	// This array is used: 
-	//     0 to save the channel's instruction pointer 
+	// This array is used:
+	//     0 to save the channel's instruction pointer
 	//     when the channel release control (this happens on a break).
 	//     1 When a setVec is requested for the next vm frame.
 	uint8_t vmIsChannelActive[NUM_THREAD_FIELDS][VM_NUM_THREADS];
@@ -91,9 +95,13 @@ struct VirtualMachine {
 	uint8_t _stackPtr;
 	bool gotoNextThread;
 
+#if 0
 	VirtualMachine(Mixer *mix, Resource *res, SfxPlayer *ply, Video *vid, System *stub);
+#else
+	VirtualMachine(Resource *res, Video *vid, System *stub);
+#endif
 	void init();
-	
+
 	void op_movConst();
 	void op_mov();
 	void op_add();
@@ -111,7 +119,7 @@ struct VirtualMachine {
 	void op_fillVideoPage();
 	void op_copyVideoPage();
 	void op_blitFramebuffer();
-	void op_killThread();	
+	void op_killThread();
 	void op_drawString();
 	void op_sub();
 	void op_and();
@@ -125,14 +133,14 @@ struct VirtualMachine {
 	void initForPart(uint16_t partId);
 	void checkThreadRequests();
 	void hostFrame();
-	void executeThread();
+	void executeThread(int threadId);
 
 	void inp_updatePlayer();
 	void inp_handleSpecialKeys();
-	
+
 	void snd_playSound(uint16_t resNum, uint8_t freq, uint8_t vol, uint8_t channel);
 	void snd_playMusic(uint16_t resNum, uint16_t delay, uint8_t pos);
-	
+
 	void saveOrLoad(Serializer &ser);
 };
 

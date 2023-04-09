@@ -19,7 +19,7 @@
 #include "bank.h"
 #include "file.h"
 #include "resource.h"
-
+#include <iostream>
 
 Bank::Bank(const char *dataDir)
 	: _dataDir(dataDir) {
@@ -35,21 +35,25 @@ bool Bank::read(const MemEntry *me, uint8_t *buf) {
 	if (!f.open(bankName, _dataDir))
 		error("Bank::read() unable to open '%s'", bankName);
 
-	
+
 	f.seek(me->bankOffset);
 
 	// Depending if the resource is packed or not we
 	// can read directly or unpack it.
 	if (me->packedSize == me->size) {
+    std::cerr << "    bank " << (int)me->bankId << " => unpacked bank\n";
 		f.read(buf, me->packedSize);
 		ret = true;
 	} else {
+    std::cerr << "    bank " << (int)me->bankId << " => packed bank \n";
 		f.read(buf, me->packedSize);
 		_startBuf = buf;
 		_iBuf = buf + me->packedSize - 4;
 		ret = unpack();
 	}
-	
+  std::cerr << "    entry offset: " << me->bankOffset << '\n';
+  std::cerr << "    entry size  : " << me->size << '\n';
+
 	return ret;
 }
 
@@ -121,7 +125,7 @@ uint16_t Bank::getCode(uint8_t numChunks) {
 		c <<= 1;
 		if (nextChunk()) {
 			c |= 1;
-		}			
+		}
 	}
 	return c;
 }

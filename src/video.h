@@ -35,7 +35,7 @@ struct Polygon {
 	uint8_t numPoints;
 	Point points[MAX_POINTS];
 
-	void readVertices(const uint8_t *p, uint16_t zoom);
+	void readVertices(const uint8_t *p, uint8_t *buf, uint16_t zoom);
 };
 
 struct Resource;
@@ -43,10 +43,10 @@ struct Serializer;
 struct System;
 
 // This is used to detect the end of  _stringsTableEng and _stringsTableDemo
-#define END_OF_STRING_DICTIONARY 0xFFFF 
+#define END_OF_STRING_DICTIONARY 0xFFFF
 
 // Special value when no palette change is necessary
-#define NO_PALETTE_CHANGE_REQUESTED 0xFF 
+#define NO_PALETTE_CHANGE_REQUESTED 0xFF
 
 
 
@@ -63,7 +63,7 @@ struct Video {
 
 	Resource *res;
 	System *sys;
-	
+
 
 
 	uint8_t paletteIdRequested, currentPaletteId;
@@ -106,7 +106,7 @@ struct Video {
 	void copyPage(const uint8_t *src);
 	void changePal(uint8_t pal);
 	void updateDisplay(uint8_t page);
-	
+
 	void saveOrLoad(Serializer &ser);
 };
 

@@ -22,9 +22,23 @@
 #include "sys.h"
 #include "parts.h"
 
+#include <vector>
+#include <string>
+#include <SDL.h>
+
 Engine::Engine(System *paramSys, const char *dataDir, const char *saveDir)
-	: sys(paramSys), vm(&mixer, &res, &player, &video, sys), mixer(sys), res(&video, dataDir), 
-	player(&mixer, &res, sys), video(&res, sys), _dataDir(dataDir), _saveDir(saveDir), _stateSlot(0) {
+	: sys(paramSys),
+#if 0
+  vm(&mixer, &res, &player, &video, sys),
+#else
+  vm(&res, &video, sys),
+#endif
+#if 0
+  mixer(sys),
+	player(&mixer, &res, sys),
+#endif
+  res(&video, dataDir),
+  video(&res, sys), _dataDir(dataDir), _saveDir(saveDir), _stateSlot(0) {
 }
 
 void Engine::run() {
@@ -35,7 +49,7 @@ void Engine::run() {
 
 		vm.inp_updatePlayer();
 
-		processInput();
+		// processInput();
 
 		vm.hostFrame();
 	}
@@ -60,21 +74,118 @@ void Engine::init() {
 
 	res.allocMemBlock();
 
+#if 1
 	res.readEntries();
+#endif
 
 	vm.init();
 
+#if 0
 	mixer.init();
 
 	player.init();
+#endif
 
 	uint16_t part = GAME_PART1;  // This game part is the protection screen
 #ifdef BYPASS_PROTECTION
-  part = GAME_PART2;
+  // part = GAME_PART2;
+  part = GAME_PART3;
 #endif
   vm.initForPart(part);
 
+  // SL: prepare string packages to simplify rendering in hardware
+  {
+    std::vector<unsigned short> table;
+    std::vector<std::vector<uint8_t> > buffers;
+    int table_bytes         = (END_OF_STRING_DICTIONARY + 2) * 2 /*short*/;
+    int table_size_in_lines = (table_bytes / 320) + 1;
+    table_bytes             = table_size_in_lines * 320;
+    table  .resize(table_bytes>>1, 0);
+    if (table.size() < END_OF_STRING_DICTIONARY + 1) {
+        debug(DBG_VM, "improper table size");
+        exit (-1);
+    }
+    buffers.resize(END_OF_STRING_DICTIONARY + 1);
+    int next = table_size_in_lines;
+    // reorder
+    std::vector<const StrEntry *> entries;
+    entries.resize(END_OF_STRING_DICTIONARY + 1, nullptr);
+    for (const StrEntry *se = Video::_stringsTableEng; se->id != END_OF_STRING_DICTIONARY; ++se) {
+      entries[se->id] = se;
+    }
+    for (int s=0;s<entries.size();++s) {
+      const StrEntry *se = entries[s];
+      if (se == nullptr) continue;
+      if (se->id != s) {
+        debug(DBG_VM, "index error");
+        exit (-1);
+      }
+      // determine buffer height
+      int h = 8;
+      int len = strlen(se->str);
+      for (int i = 0; i < len; ++i) { if (se->str[i] == '\n') { h += 8; } }
+      // allocate buffer
+      buffers[se->id].resize( h * 320 /*full row*/, 0 );
+      // add to table
+      if (next > 65535) {
+        debug(DBG_VM, "index too large");
+        exit (-1);
+      }
+      table[se->id]   = next;
+      next += h;
+      table[se->id+1] = next;
+      debug(DBG_VM, "text %d from %x to %x",se->id,table[se->id],table[se->id+1]);
+      // draw string
+      std::vector<uint8_t> draw;
+      draw.resize( h * 160 /*4bpp, full row*/, 0 );
+	    uint16_t x = 0, y = 0;
+    	for (int i = 0; i < len; ++i) {
+        if (se->str[i] == '\n') {
+          y += 8;
+          x = 0;
+          continue;
+        }
+    		video.drawChar(se->str[i], x, y, 15, &draw[0]);
+		    x++;
+    	}
+      // convert in byte buffer
+      for (int j=0;j<h;++j) {
+        for (int i=0;i<160;++i) {
+          buffers[se->id][(i<<1)+0+j*320] =  (draw[i+j*160] & 0xf0) ? 0xff : 0;
+          buffers[se->id][(i<<1)+1+j*320] =  (draw[i+j*160] & 0x0f) ? 0xff : 0;
+        }
+      }
+      // image output for debug
+      SDL_Surface *srf = SDL_CreateRGBSurfaceWithFormat(0,320,h,24, SDL_PIXELFORMAT_RGB24);
+      uint8_t *ptr = (uint8_t *)srf->pixels;
+      for (int j=0;j<h;++j) {
+        for (int i=0;i<320;++i) {
+          ptr[(i+j*320)*3+0] = buffers[se->id][i+j*320];
+          ptr[(i+j*320)*3+1] = buffers[se->id][i+j*320];
+          ptr[(i+j*320)*3+2] = buffers[se->id][i+j*320];
+        }
+      }
+      SDL_SaveBMP(srf,(std::string("test") + std::to_string(se->id) + ".bmp").c_str());
+      SDL_FreeSurface(srf);
+    }
+    table.back() = next; // close the table
+    debug(DBG_VM, "total string table size: %d",next*320 + sizeof(short)*table.size());
 
+    // dump file
+    FILE *f = fopen("stringtable.raw","wb");
+    int check_written = 0;
+    check_written += fwrite(&table[0],1,table.size()*sizeof(short),f);
+    for (int i=0;i<buffers.size();++i) {
+      if (!buffers[i].empty()) {
+        debug(DBG_VM, "[writing] %d at %x (%d bytes)",i,check_written,buffers[i].size());
+        check_written += fwrite(&(buffers[i][0]),1,buffers[i].size(),f);
+      }
+    }
+    fclose(f);
+
+    // exit (-1);
+
+  }
 
   // Try to cheat here. You can jump anywhere but the VM crashes afterward.
 	// Starting somewhere is probably not enough, the variables and calls return are probably missing.
@@ -89,8 +200,10 @@ void Engine::init() {
 }
 
 void Engine::finish() {
+#if 0
 	player.free();
 	mixer.free();
+#endif
 	res.freeMemBlock();
 }
 
@@ -118,6 +231,7 @@ void Engine::makeGameStateName(uint8_t slot, char *buf) {
 }
 
 void Engine::saveGameState(uint8_t slot, const char *desc) {
+#if 0
 	char stateFile[20];
 	makeGameStateName(slot, stateFile);
 	File f(true);
@@ -144,9 +258,11 @@ void Engine::saveGameState(uint8_t slot, const char *desc) {
 			debug(DBG_INFO, "Saved state to slot %d", _stateSlot);
 		}
 	}
+#endif
 }
 
 void Engine::loadGameState(uint8_t slot) {
+#if 0
 	char stateFile[20];
 	makeGameStateName(slot, stateFile);
 	File f(true);
@@ -179,4 +295,5 @@ void Engine::loadGameState(uint8_t slot) {
 			debug(DBG_INFO, "Loaded state from slot %d", _stateSlot);
 		}
 	}
+#endif
 }

@@ -24,11 +24,16 @@
 #include "util.h"
 #include "parts.h"
 
-Resource::Resource(Video *vid, const char *dataDir) 
+#include <iostream>
+
+// #define USE_DUMP
+
+Resource::Resource(Video *vid, const char *dataDir)
 	: video(vid), _dataDir(dataDir), currentPartId(0),requestedNextPart(0) {
 }
 
 void Resource::readBank(const MemEntry *me, uint8_t *dstBuf) {
+#ifndef USE_DUMP
 	uint16_t n = me - _memList;
 	debug(DBG_BANK, "Resource::readBank(%d)", n);
 
@@ -36,7 +41,7 @@ void Resource::readBank(const MemEntry *me, uint8_t *dstBuf) {
 	if (!bk.read(me, dstBuf)) {
 		error("Resource::readBank() unable to unpack entry %d\n", n);
 	}
-
+#endif
 }
 
 static const char *resTypeToString(unsigned int type)
@@ -65,10 +70,11 @@ int resourceUnitStats[7][2];
 	Read all entries from memlist.bin. Do not load anything in memory,
 	this is just a fast way to access the data later based on their id.
 */
-void Resource::readEntries() {	
+void Resource::readEntries() {
+#ifndef USE_DUMP
 	File f;
 	int resourceCounter = 0;
-	
+
 
 	if (!f.open("memlist.bin", _dataDir)) {
 		error("Resource::readEntries() unable to open 'memlist.bin' file\n");
@@ -98,6 +104,8 @@ void Resource::readEntries() {
     if (memEntry->state == MEMENTRY_STATE_END_OF_MEMLIST) {
       break;
     }
+
+
 
 		//Memory tracking
 		if (memEntry->packedSize==memEntry->size)
@@ -155,7 +163,7 @@ void Resource::readEntries() {
 	debug(DBG_RES,"\nTotal bank files:              %d",resourceUnitStats[STATS_TOTAL_SIZE][RES_SIZE]+resourceUnitStats[STATS_TOTAL_SIZE][RES_COMPRESSED]);
 	for(int i=0 ; i < 6 ; i++)
 		debug(DBG_RES,"Total %-17s files: %3d",resTypeToString(i),resourceUnitStats[i][RES_SIZE]+resourceUnitStats[i][RES_COMPRESSED]);
-
+#endif
 }
 
 /*
@@ -163,9 +171,11 @@ void Resource::readEntries() {
 	Load them in memory and mark them are MEMENTRY_STATE_LOADED
 */
 void Resource::loadMarkedAsNeeded() {
+#ifndef USE_DUMP
+  std::cerr << "    Resource::loadMarkedAsNeeded [in]\n";
 
 	while (1) {
-		
+
 		MemEntry *me = NULL;
 
 		// get resource with max rankNum
@@ -179,20 +189,22 @@ void Resource::loadMarkedAsNeeded() {
 			}
 			it++;
 		}
-		
+
 		if (me == NULL) {
 			break; // no entry found
 		}
 
-		
+
 		// At this point the resource descriptor should be pointed to "me"
 		// "That's what she said"
 
 		uint8_t *loadDestination = NULL;
 		if (me->type == RT_POLY_ANIM) {
+			std::cerr << "    Resource::loadMarkedAsNeeded RT_POLY_ANIM ############################### \n";
 			loadDestination = _vidCurPtr;
 		} else {
 			loadDestination = _scriptCurPtr;
+      std::cerr << "    Resource::loadMarkedAsNeeded @" << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 			if (me->size > _vidBakPtr - _scriptCurPtr) {
 				warning("Resource::load() not enough memory");
 				me->state = MEMENTRY_STATE_NOT_NEEDED;
@@ -200,14 +212,13 @@ void Resource::loadMarkedAsNeeded() {
 			}
 		}
 
-
 		if (me->bankId == 0) {
 			warning("Resource::load() ec=0x%X (me->bankId == 0)", 0xF00);
 			me->state = MEMENTRY_STATE_NOT_NEEDED;
 		} else {
 			debug(DBG_BANK, "Resource::load() bufPos=%X size=%X type=%X pos=%X bankId=%X", loadDestination - _memPtrStart, me->packedSize, me->type, me->bankOffset, me->bankId);
 			readBank(me, loadDestination);
-			if(me->type == RT_POLY_ANIM) {
+			if (me->type == RT_POLY_ANIM) {
         video->copyPage(_vidCurPtr);
 				me->state = MEMENTRY_STATE_NOT_NEEDED;
 			} else {
@@ -219,10 +230,12 @@ void Resource::loadMarkedAsNeeded() {
 
 	}
 
-
+  std::cerr << "    Resource::loadMarkedAsNeeded [out]\n";
+#endif
 }
 
 void Resource::invalidateRes() {
+#ifndef USE_DUMP
 	MemEntry *me = _memList;
 	uint16_t i = _numMemList;
 	while (i--) {
@@ -232,9 +245,11 @@ void Resource::invalidateRes() {
 		++me;
 	}
 	_scriptCurPtr = _scriptBakPtr;
+#endif
 }
 
 void Resource::invalidateAll() {
+#ifndef USE_DUMP
 	MemEntry *me = _memList;
 	uint16_t i = _numMemList;
 	while (i--) {
@@ -242,20 +257,27 @@ void Resource::invalidateAll() {
 		++me;
 	}
 	_scriptCurPtr = _memPtrStart;
+#endif
 }
 
-/* This method serves two purpose: 
+/* This method serves two purpose:
     - Load parts in memory segments (palette,code,video1,video2)
 	           or
     - Load a resource in memory
 
-	This is decided based on the resourceId. If it does not match a mementry id it is supposed to 
+	This is decided based on the resourceId. If it does not match a mementry id it is supposed to
 	be a part id. */
 void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
+
+#ifndef USE_DUMP
+  auto prev = _scriptCurPtr;
+
+  std::cerr << "    Resource::loadPartsOrMemoryEntry [in] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 
 	if (resourceId > _numMemList) {
 
 		requestedNextPart = resourceId;
+    std::cerr << "    Resource::loadPartsOrMemoryEntry [requestedNextPart]\n";
 
 	} else {
 
@@ -265,20 +287,89 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
 			me->state = MEMENTRY_STATE_LOAD_ME;
 			loadMarkedAsNeeded();
 		}
+
 	}
+
+  // ---------------------------------------------------
+  // dump loaded content in a file (latest contains all)
+  // ---------------------------------------------------
+  if (_scriptCurPtr > prev) {
+    FILE *dump = NULL;
+    char str[512];
+	// dump raw data
+    sprintf(str,"dump.raw");
+    dump = fopen(str,"wb");
+    if (dump) {
+      fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
+
+      unsigned long long offs = segBytecode - _memPtrStart;
+      std::cerr << "segBytecode = " << offs << '\n';
+      fwrite(&offs,1,sizeof(offs),dump);
+
+      offs = segPalettes - _memPtrStart;
+      std::cerr << "segPalettes = " << offs << '\n';
+      fwrite(&offs,1,sizeof(offs),dump);
+
+      offs = segCinematic - _memPtrStart;
+      std::cerr << "segCinematic = " << offs << '\n';
+      fwrite(&offs,1,sizeof(offs),dump);
+
+      offs = _segVideo2 - _memPtrStart;
+      std::cerr << "segVideo2 = " << offs << '\n';
+      fwrite(&offs,1,sizeof(offs),dump);
+
+      fclose(dump);
+    }
+    // write offsets in an include file
+    sprintf(str,"dump.si");
+    dump = fopen(str,"w");
+    if (dump) {
+      unsigned int offs = (unsigned int)(segBytecode - _memPtrStart);
+	    fprintf(dump,"$$segBytecode = %d\n",offs);
+      offs = segPalettes - _memPtrStart;
+	    fprintf(dump,"$$segPalettes = %d\n",offs);
+      offs = segCinematic - _memPtrStart;
+	    fprintf(dump,"$$segCinematic = %d\n",offs);
+      offs = _segVideo2 - _memPtrStart;
+	    fprintf(dump,"$$segVideo2 = %d\n",offs);
+      fclose(dump);
+    }
+  }
+  std::cerr << "    Resource::loadPartsOrMemoryEntry [out] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+#endif
 
 }
 
+
+void Resource::loadDump(const char *f)
+{
+	std::cerr << "    Resource::loadDump [in]\n";
+  FILE *dump = NULL;
+  dump = fopen(f,"rb");
+  if (dump) {
+    auto nbytes = fread(_memPtrStart,1,MEM_BLOCK_SIZE,dump);
+    std::cerr << "read " << nbytes << '\n';
+    _scriptCurPtr = _memPtrStart + nbytes - sizeof(unsigned long long)*4;
+    segBytecode   = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*4);
+    segPalettes   = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*3);
+    segCinematic  = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*2);
+    _segVideo2    = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*1);
+    fclose(dump);
+  }
+	std::cerr << "    Resource::loadDump [out] "  << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+}
+
+
 /* Protection screen and cinematic don't need the player and enemies polygon data
-   so _memList[video2Index] is never loaded for those parts of the game. When 
-   needed (for action phrases) _memList[video2Index] is always loaded with 0x11 
+   so _memList[video2Index] is never loaded for those parts of the game. When
+   needed (for action phrases) _memList[video2Index] is always loaded with 0x11
    (as seen in memListParts). */
 void Resource::setupPart(uint16_t partId) {
-
-	
-
+#ifndef USE_DUMP
 	if (partId == currentPartId)
 		return;
+
+  std::cerr << "    Resource::setupPart [in]\n";
 
 	if (partId < GAME_PART_FIRST || partId > GAME_PART_LAST)
 		error("Resource::setupPart() ec=0x%X invalid partId", partId);
@@ -299,39 +390,44 @@ void Resource::setupPart(uint16_t partId) {
 
 	// This is probably a cinematic or a non interactive part of the game.
 	// Player and enemy polygons are not needed.
-	if (video2Index != MEMLIST_PART_NONE) 
+	if (video2Index != MEMLIST_PART_NONE)
 		_memList[video2Index].state = MEMENTRY_STATE_LOAD_ME;
-	
+
 
 	loadMarkedAsNeeded();
 
-	segPalettes = _memList[paletteIndex].bufPtr;
-	segBytecode     = _memList[codeIndex].bufPtr;
-	segCinematic   = _memList[videoCinematicIndex].bufPtr;
-
-
+	segPalettes  = _memList[paletteIndex].bufPtr;
+	segBytecode  = _memList[codeIndex].bufPtr;
+	segCinematic = _memList[videoCinematicIndex].bufPtr;
 
 	// This is probably a cinematic or a non interactive part of the game.
 	// Player and enemy polygons are not needed.
-	if (video2Index != MEMLIST_PART_NONE) 
+	if (video2Index != MEMLIST_PART_NONE)
 		_segVideo2 = _memList[video2Index].bufPtr;
-	
+
 	debug(DBG_RES,"");
 	debug(DBG_RES,"setupPart(%d)",partId-GAME_PART_FIRST);
 	debug(DBG_RES,"Loaded resource %d (%s) in segPalettes.",paletteIndex,resTypeToString(_memList[paletteIndex].type));
 	debug(DBG_RES,"Loaded resource %d (%s) in segBytecode.",codeIndex,resTypeToString(_memList[codeIndex].type));
 	debug(DBG_RES,"Loaded resource %d (%s) in segCinematic.",videoCinematicIndex,resTypeToString(_memList[videoCinematicIndex].type));
 
-	if (video2Index != MEMLIST_PART_NONE) 
+	if (video2Index != MEMLIST_PART_NONE)
 		debug(DBG_RES,"Loaded resource %d (%s) in _segVideo2.",video2Index,resTypeToString(_memList[video2Index].type));
 
 
-
 	currentPartId = partId;
-	
 
 	// _scriptCurPtr is changed in this->load();
-	_scriptBakPtr = _scriptCurPtr;	
+	_scriptBakPtr = _scriptCurPtr;
+
+#else
+
+  loadDump("dump.raw");
+
+#endif
+
+  std::cerr << "    Resource::setupPart [out]\n";
+
 }
 
 void Resource::allocMemBlock() {
@@ -346,6 +442,7 @@ void Resource::freeMemBlock() {
 }
 
 void Resource::saveOrLoad(Serializer &ser) {
+#ifndef USE_DUMP
 	uint8_t loadedList[64];
 	if (ser._mode == Serializer::SM_SAVE) {
 		memset(loadedList, 0, sizeof(loadedList));
@@ -397,5 +494,6 @@ void Resource::saveOrLoad(Serializer &ser) {
 			me->state = MEMENTRY_STATE_LOADED;
 			q += me->size;
 		}
-	}	
+	}
+#endif
 }

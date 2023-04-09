@@ -27,9 +27,20 @@
 #include "parts.h"
 #include "file.h"
 
+#include <iostream>
+
+// #define NO_VIDEO
+#define NO_MUSIC
+
+#if 0
 VirtualMachine::VirtualMachine(Mixer *mix, Resource *resParameter, SfxPlayer *ply, Video *vid, System *stub)
 	: mixer(mix), res(resParameter), player(ply), video(vid), sys(stub) {
 }
+#else
+VirtualMachine::VirtualMachine(Resource *resParameter, Video *vid, System *stub)
+	: res(resParameter), video(vid), sys(stub) {
+}
+#endif
 
 void VirtualMachine::init() {
 
@@ -44,36 +55,37 @@ void VirtualMachine::init() {
    // these 2 variables are set by the engine executable
    vmVariables[0xDC] = 33;
 #endif
-
+#ifndef NO_MUSIC
 	player->_markVar = &vmVariables[VM_VARIABLE_MUS_MARK];
+#endif
 }
 
 void VirtualMachine::op_movConst() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	int16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_movConst(0x%02X, %d)", variableId, value);
+	debug(DBG_VM, "op_movConst [%d]= %d", variableId, value);
 	vmVariables[variableId] = value;
 }
 
 void VirtualMachine::op_mov() {
 	uint8_t dstVariableId = _scriptPtr.fetchByte();
-	uint8_t srcVariableId = _scriptPtr.fetchByte();	
-	debug(DBG_VM, "VirtualMachine::op_mov(0x%02X, 0x%02X)", dstVariableId, srcVariableId);
+	uint8_t srcVariableId = _scriptPtr.fetchByte();
+	debug(DBG_VM, "op_mov [%d] = [%d]", dstVariableId, srcVariableId);
 	vmVariables[dstVariableId] = vmVariables[srcVariableId];
 }
 
 void VirtualMachine::op_add() {
 	uint8_t dstVariableId = _scriptPtr.fetchByte();
 	uint8_t srcVariableId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_add(0x%02X, 0x%02X)", dstVariableId, srcVariableId);
+	debug(DBG_VM, "op_add [%d](%d) += [%d](%d)", srcVariableId, vmVariables[srcVariableId], dstVariableId,vmVariables[dstVariableId]);
 	vmVariables[dstVariableId] += vmVariables[srcVariableId];
 }
 
 void VirtualMachine::op_addConst() {
 	if (res->currentPartId == 0x3E86 && _scriptPtr.pc == res->segBytecode + 0x6D48) {
-		warning("VirtualMachine::op_addConst() hack for non-stop looping gun sound bug");
-		// the script 0x27 slot 0x17 doesn't stop the gun sound from looping, I 
-		// don't really know why ; for now, let's play the 'stopping sound' like 
+		warning("op_addConst() hack for non-stop looping gun sound bug");
+		// the script 0x27 slot 0x17 doesn't stop the gun sound from looping, I
+		// don't really know why ; for now, let's play the 'stopping sound' like
 		// the other scripts do
 		//  (0x6D43) jmp(0x6CE5)
 		//  (0x6D46) break
@@ -82,7 +94,7 @@ void VirtualMachine::op_addConst() {
 	}
 	uint8_t variableId = _scriptPtr.fetchByte();
 	int16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_addConst(0x%02X, %d)", variableId, value);
+	debug(DBG_VM, "op_addConst [%d]+=%d (before: %d)", variableId, value, vmVariables[variableId]);
 	vmVariables[variableId] += value;
 }
 
@@ -91,49 +103,50 @@ void VirtualMachine::op_call() {
 	uint16_t offset = _scriptPtr.fetchWord();
 	uint8_t sp = _stackPtr;
 
-	debug(DBG_VM, "VirtualMachine::op_call(0x%X)", offset);
+	debug(DBG_VM, "op_call(%x)", offset);
 	_scriptStackCalls[sp] = _scriptPtr.pc - res->segBytecode;
 	if (_stackPtr == 0xFF) {
-		error("VirtualMachine::op_call() ec=0x%X stack overflow", 0x8F);
+		error("op_call() ec=0x%X stack overflow", 0x8F);
 	}
 	++_stackPtr;
 	_scriptPtr.pc = res->segBytecode + offset ;
 }
 
 void VirtualMachine::op_ret() {
-	debug(DBG_VM, "VirtualMachine::op_ret()");
+	debug(DBG_VM, "op_ret");
 	if (_stackPtr == 0) {
-		error("VirtualMachine::op_ret() ec=0x%X stack underflow", 0x8F);
-	}	
+		error("op_ret() ec=0x%X stack underflow", 0x8F);
+	}
 	--_stackPtr;
 	uint8_t sp = _stackPtr;
 	_scriptPtr.pc = res->segBytecode + _scriptStackCalls[sp];
 }
 
 void VirtualMachine::op_pauseThread() {
-	debug(DBG_VM, "VirtualMachine::op_pauseThread()");
+	debug(DBG_VM, "op_pauseThread");
 	gotoNextThread = true;
 }
 
 void VirtualMachine::op_jmp() {
 	uint16_t pcOffset = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_jmp(0x%02X)", pcOffset);
-	_scriptPtr.pc = res->segBytecode + pcOffset;	
+	debug(DBG_VM, "op_jmp %x", pcOffset);
+	_scriptPtr.pc = res->segBytecode + pcOffset;
 }
 
 void VirtualMachine::op_setSetVect() {
 	uint8_t threadId = _scriptPtr.fetchByte();
 	uint16_t pcOffsetRequested = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_setSetVect(0x%X, 0x%X)", threadId,pcOffsetRequested);
+	debug(DBG_VM, "op_setSetVec %d %x", threadId,pcOffsetRequested);
 	threadsData[REQUESTED_PC_OFFSET][threadId] = pcOffsetRequested;
 }
 
 void VirtualMachine::op_jnz() {
 	uint8_t i = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_jnz(0x%02X)", i);
 	--vmVariables[i];
+	debug(DBG_VM, "op_jnz %x if %d != 0", i,vmVariables[i]);
 	if (vmVariables[i] != 0) {
-		op_jmp();
+  	uint16_t pcOffset = _scriptPtr.fetchWord();
+	  _scriptPtr.pc = res->segBytecode + pcOffset;
 	} else {
 		_scriptPtr.fetchWord();
 	}
@@ -152,7 +165,6 @@ void VirtualMachine::op_condJmp() {
 	} else {
     a = _scriptPtr.fetchByte();
 	}
-	debug(DBG_VM, "VirtualMachine::op_condJmp(%d, 0x%02X, 0x%02X)", opcode, b, a);
 
 	// Check if the conditional value is met.
 	bool expr = false;
@@ -196,12 +208,15 @@ void VirtualMachine::op_condJmp() {
 		expr = (b <= a);
 		break;
 	default:
-		warning("VirtualMachine::op_condJmp() invalid condition %d", (opcode & 7));
+		warning("op_condJmp() invalid condition %d", (opcode & 7));
 		break;
 	}
 
+	debug(DBG_VM, "op_condJmp b:%d a:%d expr:%d", b,a, expr);
+
 	if (expr) {
-		op_jmp();
+  	uint16_t pcOffset = _scriptPtr.fetchWord();
+	  _scriptPtr.pc = res->segBytecode + pcOffset;
 	} else {
 		_scriptPtr.fetchWord();
 	}
@@ -210,8 +225,10 @@ void VirtualMachine::op_condJmp() {
 
 void VirtualMachine::op_setPalette() {
 	uint16_t paletteId = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_changePalette(%d)", paletteId);
+	debug(DBG_VM, "op_setPalette %d", paletteId);
+#ifndef NO_VIDEO
 	video->paletteIdRequested = paletteId >> 8;
+#endif
 }
 
 void VirtualMachine::op_resetThread() {
@@ -228,13 +245,13 @@ void VirtualMachine::op_resetThread() {
 	int8_t n = i - threadId;
 
 	if (n < 0) {
-		warning("VirtualMachine::op_resetThread() ec=0x%X (n < 0)", 0x880);
+		warning("op_resetThread() ec=0x%X (n < 0)", 0x880);
 		return;
 	}
 	++n;
 	uint8_t a = _scriptPtr.fetchByte();
 
-	debug(DBG_VM, "VirtualMachine::op_resetThread(%d, %d, %d)", threadId, i, a);
+	debug(DBG_VM, "op_resetThread");
 
 	if (a == 2) {
 		uint16_t *p = &threadsData[REQUESTED_PC_OFFSET][threadId];
@@ -251,22 +268,28 @@ void VirtualMachine::op_resetThread() {
 
 void VirtualMachine::op_selectVideoPage() {
 	uint8_t frameBufferId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_selectVideoPage(%d)", frameBufferId);
+	debug(DBG_VM, "op_selectVideoPage %x", frameBufferId);
+#ifndef NO_VIDEO
 	video->changePagePtr1(frameBufferId);
+#endif
 }
 
 void VirtualMachine::op_fillVideoPage() {
 	uint8_t pageId = _scriptPtr.fetchByte();
 	uint8_t color = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_fillVideoPage(%d, %d)", pageId, color);
+	debug(DBG_VM, "op_fillVideoPage %x,%x", pageId, color);
+#ifndef NO_VIDEO
 	video->fillPage(pageId, color);
+#endif
 }
 
 void VirtualMachine::op_copyVideoPage() {
 	uint8_t srcPageId = _scriptPtr.fetchByte();
 	uint8_t dstPageId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_copyVideoPage(%d, %d)", srcPageId, dstPageId);
+	debug(DBG_VM, "op_copyVideoPage %x => %x", srcPageId, dstPageId);
+#ifndef NO_VIDEO
 	video->copyPage(srcPageId, dstPageId, vmVariables[VM_VARIABLE_SCROLL_Y]);
+#endif
 }
 
 
@@ -274,7 +297,7 @@ uint32_t lastTimeStamp = 0;
 void VirtualMachine::op_blitFramebuffer() {
 
 	uint8_t pageId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_blitFramebuffer(%d)", pageId);
+	debug(DBG_VM, "op_blitFramebuffer %x", pageId);
 	inp_handleSpecialKeys();
 
   int32_t delay = sys->getTimeStamp() - lastTimeStamp;
@@ -291,12 +314,13 @@ void VirtualMachine::op_blitFramebuffer() {
 
 	//WTF ?
 	vmVariables[0xF7] = 0;
-
+#ifndef NO_VIDEO
 	video->updateDisplay(pageId);
+#endif
 }
 
 void VirtualMachine::op_killThread() {
-	debug(DBG_VM, "VirtualMachine::op_killThread()");
+	debug(DBG_VM, "op_killThread");
 	_scriptPtr.pc = res->segBytecode + 0xFFFF;
 	gotoNextThread = true;
 }
@@ -307,43 +331,44 @@ void VirtualMachine::op_drawString() {
 	uint16_t y = _scriptPtr.fetchByte();
 	uint16_t color = _scriptPtr.fetchByte();
 
-	debug(DBG_VM, "VirtualMachine::op_drawString(0x%03X, %d, %d, %d)", stringId, x, y, color);
-
+	debug(DBG_VM, "op_drawString %d %d %d %d", stringId, x, y, color);
+#ifndef NO_VIDEO
 	video->drawString(color, x, y, stringId);
+#endif
 }
 
 void VirtualMachine::op_sub() {
 	uint8_t i = _scriptPtr.fetchByte();
 	uint8_t j = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_sub(0x%02X, 0x%02X)", i, j);
+	debug(DBG_VM, "op_sub [%d](%d) -= [%d](%d)", i, vmVariables[i], j, vmVariables[j]);
 	vmVariables[i] -= vmVariables[j];
 }
 
 void VirtualMachine::op_and() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t n = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_and(0x%02X, %d)", variableId, n);
+	debug(DBG_VM, "op_and [%d](%d) &= %d", variableId, vmVariables[variableId], n);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] & n;
 }
 
 void VirtualMachine::op_or() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_or(0x%02X, %d)", variableId, value);
+	debug(DBG_VM, "op_or [%d](%d) |= %d", variableId, vmVariables[variableId], value);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] | value;
 }
 
 void VirtualMachine::op_shl() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t leftShiftValue = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_shl(0x%02X, %d)", variableId, leftShiftValue);
+	debug(DBG_VM, "op_shl[%d](%d) <<= %d", variableId, vmVariables[variableId], leftShiftValue);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] << leftShiftValue;
 }
 
 void VirtualMachine::op_shr() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t rightShiftValue = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_shr(0x%02X, %d)", variableId, rightShiftValue);
+	debug(DBG_VM, "op_shr[%d](%d) >>= %d", variableId, vmVariables[variableId], rightShiftValue);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] >> rightShiftValue;
 }
 
@@ -352,37 +377,41 @@ void VirtualMachine::op_playSound() {
 	uint8_t freq = _scriptPtr.fetchByte();
 	uint8_t vol = _scriptPtr.fetchByte();
 	uint8_t channel = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_playSound(0x%X, %d, %d, %d)", resourceId, freq, vol, channel);
+	debug(DBG_VM, "op_playSound %d %d %d %d", resourceId, freq, vol, channel);
 	snd_playSound(resourceId, freq, vol, channel);
 }
 
 void VirtualMachine::op_updateMemList() {
-
 	uint16_t resourceId = _scriptPtr.fetchWord();
-	debug(DBG_VM, "VirtualMachine::op_updateMemList(%d)", resourceId);
-
+	//debug(DBG_VM, "op_updateMemList %d", resourceId);
+#if 1
 	if (resourceId == 0) {
+#ifndef NO_MUSIC
 		player->stop();
 		mixer->stopAll();
+#endif
 		res->invalidateRes();
 	} else {
 		res->loadPartsOrMemoryEntry(resourceId);
 	}
+#endif
 }
 
 void VirtualMachine::op_playMusic() {
 	uint16_t resNum = _scriptPtr.fetchWord();
 	uint16_t delay = _scriptPtr.fetchWord();
 	uint8_t pos = _scriptPtr.fetchByte();
-	debug(DBG_VM, "VirtualMachine::op_playMusic(0x%X, %d, %d)", resNum, delay, pos);
+	debug(DBG_VM, "op_playMusic %d %d %d", resNum, delay, pos);
 	snd_playMusic(resNum, delay, pos);
 }
 
 void VirtualMachine::initForPart(uint16_t partId) {
 
+  std::cerr << "    ******* initForPart ******* " << partId << '\n';
+#ifndef NO_MUSIC
 	player->stop();
 	mixer->stopAll();
-
+#endif
 	//WTF is that ?
 	vmVariables[0xE4] = 0x14;
 
@@ -393,12 +422,12 @@ void VirtualMachine::initForPart(uint16_t partId) {
 
 
 	memset((uint8_t *)vmIsChannelActive, 0, sizeof(vmIsChannelActive));
-	
+
 	int firstThreadId = 0;
-	threadsData[PC_OFFSET][firstThreadId] = 0;	
+	threadsData[PC_OFFSET][firstThreadId] = 0;
 }
 
-/* 
+/*
      This is called every frames in the infinite loop.
 */
 void VirtualMachine::checkThreadRequests() {
@@ -409,7 +438,7 @@ void VirtualMachine::checkThreadRequests() {
 		res->requestedNextPart = 0;
 	}
 
-	
+
 	// Check if a state update has been requested for any thread during the previous VM execution:
 	//      - Pause
 	//      - Jump
@@ -445,7 +474,7 @@ void VirtualMachine::hostFrame() {
 
 		if (vmIsChannelActive[CURR_STATE][threadId])
 			continue;
-		
+
 		uint16_t n = threadsData[PC_OFFSET][threadId];
 
 		if (n != VM_INACTIVE_THREAD) {
@@ -457,19 +486,19 @@ void VirtualMachine::hostFrame() {
 			_stackPtr = 0;
 
 			gotoNextThread = false;
-			debug(DBG_VM, "VirtualMachine::hostFrame() i=0x%02X n=0x%02X *p=0x%02X", threadId, n, *_scriptPtr.pc);
-			executeThread();
+			debug(DBG_VM, "hostFrame() i=0x%02X n=0x%02X *p=0x%02X p=%x", threadId, n, *_scriptPtr.pc,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
+			executeThread(threadId);
 
 			//Since .pc is going to be modified by this next loop iteration, we need to save it.
 			threadsData[PC_OFFSET][threadId] = _scriptPtr.pc - res->segBytecode;
 
 
-			debug(DBG_VM, "VirtualMachine::hostFrame() i=0x%02X pos=0x%X", threadId, threadsData[PC_OFFSET][threadId]);
+			debug(DBG_VM, "hostFrame() i=0x%02X pos=0x%X", threadId, threadsData[PC_OFFSET][threadId]);
 			if (sys->input.quit) {
 				break;
 			}
 		}
-		
+
 	}
 }
 
@@ -477,13 +506,15 @@ void VirtualMachine::hostFrame() {
 #define DEFAULT_ZOOM 0x40
 
 
-void VirtualMachine::executeThread() {
+void VirtualMachine::executeThread(int threadId) {
 
 	while (!gotoNextThread) {
+
 		uint8_t opcode = _scriptPtr.fetchByte();
+    debug(DBG_VM, "[thread %3d] opcode:%02x (@%06x)",threadId,opcode,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
 
 		// 1000 0000 is set
-		if (opcode & 0x80) 
+		if (opcode & 0x80)
 		{
 			uint16_t off = ((opcode << 8) | _scriptPtr.fetchByte()) * 2;
 			res->_useSegVideo2 = false;
@@ -494,18 +525,20 @@ void VirtualMachine::executeThread() {
 				y = 199;
 				x += h;
 			}
-			debug(DBG_VIDEO, "vid_opcd_0x80 : opcode=0x%X off=0x%X x=%d y=%d", opcode, off, x, y);
+			debug(DBG_VM, "op_Polygon (vid_opcd_0x80) @%04x",off);
 
 			// This switch the polygon database to "cinematic" and probably draws a black polygon
 			// over all the screen.
+#ifndef NO_VIDEO
 			video->setDataBuffer(res->segCinematic, off);
 			video->readAndDrawPolygon(COLOR_BLACK, DEFAULT_ZOOM, Point(x,y));
+#endif
 
 			continue;
-		} 
+		}
 
 		// 0100 0000 is set
-		if (opcode & 0x40) 
+		if (opcode & 0x40)
 		{
 			int16_t x, y;
 			uint16_t off = _scriptPtr.fetchWord() * 2;
@@ -513,7 +546,7 @@ void VirtualMachine::executeThread() {
 
 			res->_useSegVideo2 = false;
 
-			if (!(opcode & 0x20)) 
+			if (!(opcode & 0x20))
 			{
 				if (!(opcode & 0x10))  // 0001 0000 is set
 				{
@@ -521,12 +554,12 @@ void VirtualMachine::executeThread() {
 				} else {
 					x = vmVariables[x];
 				}
-			} 
-			else 
+			}
+			else
 			{
 				if (opcode & 0x10) { // 0001 0000 is set
 					x += 0x100;
-				}
+        		}
 			}
 
 			y = _scriptPtr.fetchByte();
@@ -548,38 +581,42 @@ void VirtualMachine::executeThread() {
 				{
 					--_scriptPtr.pc;
 					zoom = 0x40;
-				} 
-				else 
+				}
+				else
 				{
 					zoom = vmVariables[zoom];
 				}
-			} 
-			else 
+			}
+			else
 			{
-				
+
 				if (opcode & 1) { // 0000 0001 is set
 					res->_useSegVideo2 = true;
 					--_scriptPtr.pc;
 					zoom = 0x40;
-				}
+        }
+
 			}
-			debug(DBG_VIDEO, "vid_opcd_0x40 : off=0x%X x=%d y=%d", off, x, y);
+			debug(DBG_VM, "vid_opcd_0x40 : off=0x%X x=%d y=%d useSegVideo2:%d segCinematic:%x",
+						off, x, y, (int)res->_useSegVideo2, res->segCinematic );
+			debug(DBG_VM, "op_Polygon (vid_opcd_0x40) @%04x",off);
+#ifndef NO_VIDEO
 			video->setDataBuffer(res->_useSegVideo2 ? res->_segVideo2 : res->segCinematic, off);
 			video->readAndDrawPolygon(0xFF, zoom, Point(x, y));
-
+#endif
 			continue;
-		} 
-		 
-		
-		if (opcode > 0x1A) 
+		}
+
+
+		if (opcode > 0x1A)
 		{
-			error("VirtualMachine::executeThread() ec=0x%X invalid opcode=0x%X", 0xFFF, opcode);
-		} 
-		else 
+			error("executeThread() ec=0x%X invalid opcode=0x%X", 0xFFF, opcode);
+		}
+		else
 		{
 			(this->*opcodeTable[opcode])();
 		}
-		
+
 	}
 }
 
@@ -660,7 +697,7 @@ void VirtualMachine::inp_handleSpecialKeys() {
 
 	// XXX
 	if (vmVariables[0xC9] == 1) {
-		warning("VirtualMachine::inp_handleSpecialKeys() unhandled case (vmVariables[0xC9] == 1)");
+		warning("inp_handleSpecialKeys() unhandled case (vmVariables[0xC9] == 1)");
 	}
 
 }
@@ -668,13 +705,13 @@ void VirtualMachine::inp_handleSpecialKeys() {
 void VirtualMachine::snd_playSound(uint16_t resNum, uint8_t freq, uint8_t vol, uint8_t channel) {
 
 	debug(DBG_SND, "snd_playSound(0x%X, %d, %d, %d)", resNum, freq, vol, channel);
-	
+#ifndef NO_MUSIC
 	MemEntry *me = &res->_memList[resNum];
 
 	if (me->state != MEMENTRY_STATE_LOADED)
 		return;
 
-	
+
 	if (vol == 0) {
 		mixer->stopChannel(channel);
 	} else {
@@ -689,13 +726,13 @@ void VirtualMachine::snd_playSound(uint16_t resNum, uint8_t freq, uint8_t vol, u
 		assert(freq < 40);
 		mixer->playChannel(channel & 3, &mc, frequenceTable[freq], MIN(vol, 0x3F));
 	}
-	
+#endif
 }
 
 void VirtualMachine::snd_playMusic(uint16_t resNum, uint16_t delay, uint8_t pos) {
 
 	debug(DBG_SND, "snd_playMusic(0x%X, %d, %d)", resNum, delay, pos);
-
+#ifndef NO_MUSIC
 	if (resNum != 0) {
 		player->loadSfxModule(resNum, delay, pos);
 		player->start();
@@ -704,6 +741,7 @@ void VirtualMachine::snd_playMusic(uint16_t resNum, uint16_t delay, uint8_t pos)
 	} else {
 		player->stop();
 	}
+#endif
 }
 
 void VirtualMachine::saveOrLoad(Serializer &ser) {
