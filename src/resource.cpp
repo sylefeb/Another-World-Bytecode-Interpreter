@@ -222,6 +222,10 @@ void Resource::loadMarkedAsNeeded() {
         video->copyPage(_vidCurPtr);
 				me->state = MEMENTRY_STATE_NOT_NEEDED;
 			} else {
+        if (me->type == RT_SOUND) {
+          std::cout << "-----> loading sound id = " << ((size_t)me - (size_t)_memList)/sizeof(MemEntry) << ' ';
+          std::cout << "size: " << me->size << " bytes.\n";
+        }
 				me->bufPtr = loadDestination;
 				me->state = MEMENTRY_STATE_LOADED;
 				_scriptCurPtr += me->size;

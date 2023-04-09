@@ -705,6 +705,8 @@ void VirtualMachine::inp_handleSpecialKeys() {
 void VirtualMachine::snd_playSound(uint16_t resNum, uint8_t freq, uint8_t vol, uint8_t channel) {
 
 	debug(DBG_SND, "snd_playSound(0x%X, %d, %d, %d)", resNum, freq, vol, channel);
+  std::cout << "[snd_playSound] resNum: " << resNum << '\n';
+
 #ifndef NO_MUSIC
 	MemEntry *me = &res->_memList[resNum];
 
