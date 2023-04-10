@@ -9,7 +9,7 @@
 
 #define GAME_PART_FIRST  0x3E80
 #define GAME_PART1       0x3E80
-#define GAME_PART2       0x3E81   //Introductino
+#define GAME_PART2       0x3E81   //Introduction
 #define GAME_PART3       0x3E82
 #define GAME_PART4       0x3E83   //Wake up in the suspended jail
 #define GAME_PART5       0x3E84

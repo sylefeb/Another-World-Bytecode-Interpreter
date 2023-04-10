@@ -25,14 +25,16 @@ static const char *USAGE =
 	"Raw - Another World Interpreter\n"
 	"Usage: raw [OPTIONS]...\n"
 	"  --datapath=PATH   Path to where the game is installed (default '.')\n"
-	"  --savepath=PATH   Path to where the save files are stored (default '.')\n";
+	"  --savepath=PATH   Path to where the save files are stored (default '.')\n"
+  "  --extract=INT     Part id to extract\n"
+  ;
 
 static bool parseOption(const char *arg, const char *longCmd, const char **opt) {
 	bool ret = false;
-	if (arg[0] == '-' && arg[1] == '-') {
-		if (strncmp(arg + 2, longCmd, strlen(longCmd)) == 0) {
+	if (arg[0] == '-' && arg[1] == '-') { // tests for '--'
+		if (strncmp(arg + 2, longCmd, strlen(longCmd)) == 0) { // tests vs longCmd
 			*opt = arg + 2 + strlen(longCmd);
-			ret = true;
+			ret  = true; // got it
 		}
 	}
 	return ret;
@@ -49,24 +51,26 @@ extern System *stub ;//= System_SDL_create();
 int main(int argc, char *argv[]) {
 	const char *dataPath = ".";
 	const char *savePath = ".";
+  const char *partId   = "0";
 	for (int i = 1; i < argc; ++i) {
 		bool opt = false;
-		if (strlen(argv[i]) >= 2) {
+		if (strlen(argv[i]) >= 2) { // if at least '--'
 			opt |= parseOption(argv[i], "datapath=", &dataPath);
 			opt |= parseOption(argv[i], "savepath=", &savePath);
-
+      opt |= parseOption(argv[i], "extract=",  &partId);
 		}
 		if (!opt) {
 			printf("%s",USAGE);
 			return 0;
 		}
 	}
+
 	//FCS
 	// g_debugMask = DBG_INFO | DBG_VM | DBG_VIDEO; // DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND
 	g_debugMask = 0 ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
 
 	Engine* e = new Engine(stub, dataPath, savePath);
-	e->init();
+	e->init(atoi(partId));
 	e->run();
 
 

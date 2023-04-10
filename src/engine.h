@@ -50,7 +50,7 @@ struct Engine {
 	~Engine();
 
 	void run();
-	void init();
+	void init(int partId);
 	void finish();
 	void processInput();
 

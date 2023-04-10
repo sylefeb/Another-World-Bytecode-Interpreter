@@ -64,7 +64,7 @@ Engine::~Engine(){
 }
 
 
-void Engine::init() {
+void Engine::init(int partId) {
 
 
 	//Init system
@@ -86,11 +86,8 @@ void Engine::init() {
 	player.init();
 #endif
 
-	uint16_t part = GAME_PART1;  // This game part is the protection screen
-#ifdef BYPASS_PROTECTION
-  // part = GAME_PART2;
-  part = GAME_PART3;
-#endif
+	uint16_t part = GAME_PART1 + partId;  // part1 is the protection screen
+
   vm.initForPart(part);
 
   // SL: prepare string packages to simplify rendering in hardware
@@ -155,6 +152,7 @@ void Engine::init() {
           buffers[se->id][(i<<1)+1+j*320] =  (draw[i+j*160] & 0x0f) ? 0xff : 0;
         }
       }
+#if 0
       // image output for debug
       SDL_Surface *srf = SDL_CreateRGBSurfaceWithFormat(0,320,h,24, SDL_PIXELFORMAT_RGB24);
       uint8_t *ptr = (uint8_t *)srf->pixels;
@@ -167,6 +165,7 @@ void Engine::init() {
       }
       SDL_SaveBMP(srf,(std::string("test") + std::to_string(se->id) + ".bmp").c_str());
       SDL_FreeSurface(srf);
+#endif
     }
     table.back() = next; // close the table
     debug(DBG_VM, "total string table size: %d",next*320 + sizeof(short)*table.size());
