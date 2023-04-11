@@ -223,8 +223,8 @@ void Resource::loadMarkedAsNeeded() {
 				me->state = MEMENTRY_STATE_NOT_NEEDED;
 			} else {
         if (me->type == RT_SOUND) {
-          std::cout << "-----> loading sound id = " << ((size_t)me - (size_t)_memList)/sizeof(MemEntry) << ' ';
-          std::cout << "size: " << me->size << " bytes.\n";
+          //std::cout << "-----> loading sound id = " << ((size_t)me - (size_t)_memList)/sizeof(MemEntry) << ' ';
+          //std::cout << "size: " << me->size << " bytes.\n";
         }
 				me->bufPtr = loadDestination;
 				me->state = MEMENTRY_STATE_LOADED;
@@ -299,45 +299,69 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
   // ---------------------------------------------------
   if (_scriptCurPtr > prev) {
     FILE *dump = NULL;
-    char str[512];
-	// dump raw data
-    sprintf(str,"dump.raw");
-    dump = fopen(str,"wb");
+  	// dump raw data
+    dump = fopen("data.raw","wb");
     if (dump) {
-      fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
 
-      unsigned long long offs = segBytecode - _memPtrStart;
-      std::cerr << "segBytecode = " << offs << '\n';
-      fwrite(&offs,1,sizeof(offs),dump);
+      size_t sz_written  = 0;
+      uint32_t step_over = 4*sizeof(uint32_t); // to step over the 4 offsets we add at the beginning
 
-      offs = segPalettes - _memPtrStart;
-      std::cerr << "segPalettes = " << offs << '\n';
-      fwrite(&offs,1,sizeof(offs),dump);
+      const uint32_t offs_max = 1<<17;
 
-      offs = segCinematic - _memPtrStart;
-      std::cerr << "segCinematic = " << offs << '\n';
-      fwrite(&offs,1,sizeof(offs),dump);
+      uint32_t offs = (uint32_t)(segBytecode - _memPtrStart) + step_over;
+      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+      sz_written += fwrite(&offs,1,sizeof(offs),dump);
 
-      offs = _segVideo2 - _memPtrStart;
-      std::cerr << "segVideo2 = " << offs << '\n';
-      fwrite(&offs,1,sizeof(offs),dump);
+      offs = (uint32_t)(segPalettes - _memPtrStart) + step_over;
+      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+
+      offs = (uint32_t)(segCinematic - _memPtrStart) + step_over;
+      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+
+      offs = (uint32_t)(_segVideo2 - _memPtrStart) + step_over;
+      if (_segVideo2 && offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+
+      sz_written += fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
+
+      if (sz_written > (1<<20)) {
+        std::cerr << "ERROR: data package exceeds 1MB!\n";
+        exit (-1);
+      }
+
+      // pad 1MB
+      uint8_t zero = 0;
+      while (sz_written < (1<<20)) {
+        size_t n = fwrite(&zero,1,1,dump);
+        if (n == 0) {
+          std::cerr << "ERROR: write error while packaging data!\n";
+          exit (-1);
+        }
+        sz_written += n;
+      }
+
+      // append strings
+      {
+        FILE *strs = NULL;
+        strs = fopen("stringtable.raw","rb");
+        if (strs == NULL) {
+          std::cerr << "ERROR: cannot find strings table file (stringtable.raw)!\n";
+          exit (-1);
+        }
+        while (1) { // copy (yes, this is ugly and slow, but simple)
+          uint8_t by;
+          size_t n = fread(&by,1,1,strs);
+          if (n == 0) break;
+          fwrite(&by,1,1,dump);
+        }
+        fclose(strs);
+      }
 
       fclose(dump);
     }
-    // write offsets in an include file
-    sprintf(str,"dump.si");
-    dump = fopen(str,"w");
-    if (dump) {
-      unsigned int offs = (unsigned int)(segBytecode - _memPtrStart);
-	    fprintf(dump,"$$segBytecode = %d\n",offs);
-      offs = segPalettes - _memPtrStart;
-	    fprintf(dump,"$$segPalettes = %d\n",offs);
-      offs = segCinematic - _memPtrStart;
-	    fprintf(dump,"$$segCinematic = %d\n",offs);
-      offs = _segVideo2 - _memPtrStart;
-	    fprintf(dump,"$$segVideo2 = %d\n",offs);
-      fclose(dump);
-    }
+
   }
   std::cerr << "    Resource::loadPartsOrMemoryEntry [out] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 #endif

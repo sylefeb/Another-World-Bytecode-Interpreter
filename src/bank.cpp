@@ -77,7 +77,8 @@ void Bank::decUnk2(uint8_t numChunks) {
 	debug(DBG_BANK, "Bank::decUnk2(%d) i=%d count=%d", numChunks, i, count);
 	_unpCtx.datasize -= count;
 	while (count--) {
-		assert(_oBuf >= _iBuf && _oBuf >= _startBuf);
+		assert(_oBuf >= _iBuf);
+    assert(_oBuf >= _startBuf);
 		*_oBuf = *(_oBuf + i);
 		--_oBuf;
 	}

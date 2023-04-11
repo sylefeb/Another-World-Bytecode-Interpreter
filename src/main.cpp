@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
 	//FCS
 	// g_debugMask = DBG_INFO | DBG_VM | DBG_VIDEO; // DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND
-	g_debugMask = 0 ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
+	g_debugMask = 0; // DBG_VM ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
 
 	Engine* e = new Engine(stub, dataPath, savePath);
 	e->init(atoi(partId));

@@ -63,21 +63,21 @@ void VirtualMachine::init() {
 void VirtualMachine::op_movConst() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	int16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_movConst [%d]= %d", variableId, value);
+	//debug(DBG_VM, "op_movConst [%d]= %d", variableId, value);
 	vmVariables[variableId] = value;
 }
 
 void VirtualMachine::op_mov() {
 	uint8_t dstVariableId = _scriptPtr.fetchByte();
 	uint8_t srcVariableId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_mov [%d] = [%d]", dstVariableId, srcVariableId);
+	//debug(DBG_VM, "op_mov [%d] = [%d]", dstVariableId, srcVariableId);
 	vmVariables[dstVariableId] = vmVariables[srcVariableId];
 }
 
 void VirtualMachine::op_add() {
 	uint8_t dstVariableId = _scriptPtr.fetchByte();
 	uint8_t srcVariableId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_add [%d](%d) += [%d](%d)", srcVariableId, vmVariables[srcVariableId], dstVariableId,vmVariables[dstVariableId]);
+	//debug(DBG_VM, "op_add [%d](%d) += [%d](%d)", srcVariableId, vmVariables[srcVariableId], dstVariableId,vmVariables[dstVariableId]);
 	vmVariables[dstVariableId] += vmVariables[srcVariableId];
 }
 
@@ -94,7 +94,7 @@ void VirtualMachine::op_addConst() {
 	}
 	uint8_t variableId = _scriptPtr.fetchByte();
 	int16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_addConst [%d]+=%d (before: %d)", variableId, value, vmVariables[variableId]);
+	//debug(DBG_VM, "op_addConst [%d]+=%d (before: %d)", variableId, value, vmVariables[variableId]);
 	vmVariables[variableId] += value;
 }
 
@@ -103,7 +103,7 @@ void VirtualMachine::op_call() {
 	uint16_t offset = _scriptPtr.fetchWord();
 	uint8_t sp = _stackPtr;
 
-	debug(DBG_VM, "op_call(%x)", offset);
+	//debug(DBG_VM, "op_call(%x)", offset);
 	_scriptStackCalls[sp] = _scriptPtr.pc - res->segBytecode;
 	if (_stackPtr == 0xFF) {
 		error("op_call() ec=0x%X stack overflow", 0x8F);
@@ -113,7 +113,7 @@ void VirtualMachine::op_call() {
 }
 
 void VirtualMachine::op_ret() {
-	debug(DBG_VM, "op_ret");
+	//debug(DBG_VM, "op_ret");
 	if (_stackPtr == 0) {
 		error("op_ret() ec=0x%X stack underflow", 0x8F);
 	}
@@ -123,27 +123,27 @@ void VirtualMachine::op_ret() {
 }
 
 void VirtualMachine::op_pauseThread() {
-	debug(DBG_VM, "op_pauseThread");
+	//debug(DBG_VM, "op_pauseThread");
 	gotoNextThread = true;
 }
 
 void VirtualMachine::op_jmp() {
 	uint16_t pcOffset = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_jmp %x", pcOffset);
+	//debug(DBG_VM, "op_jmp %x", pcOffset);
 	_scriptPtr.pc = res->segBytecode + pcOffset;
 }
 
 void VirtualMachine::op_setSetVect() {
 	uint8_t threadId = _scriptPtr.fetchByte();
 	uint16_t pcOffsetRequested = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_setSetVec %d %x", threadId,pcOffsetRequested);
+	//debug(DBG_VM, "op_setSetVec %d %x", threadId,pcOffsetRequested);
 	threadsData[REQUESTED_PC_OFFSET][threadId] = pcOffsetRequested;
 }
 
 void VirtualMachine::op_jnz() {
 	uint8_t i = _scriptPtr.fetchByte();
 	--vmVariables[i];
-	debug(DBG_VM, "op_jnz %x if %d != 0", i,vmVariables[i]);
+	//debug(DBG_VM, "op_jnz %x if %d != 0", i,vmVariables[i]);
 	if (vmVariables[i] != 0) {
   	uint16_t pcOffset = _scriptPtr.fetchWord();
 	  _scriptPtr.pc = res->segBytecode + pcOffset;
@@ -212,7 +212,7 @@ void VirtualMachine::op_condJmp() {
 		break;
 	}
 
-	debug(DBG_VM, "op_condJmp b:%d a:%d expr:%d", b,a, expr);
+	debug(DBG_VM, "op_condJmp b[%d]: %d a: %d expr:%d", var,b,a, expr);
 
 	if (expr) {
   	uint16_t pcOffset = _scriptPtr.fetchWord();
@@ -225,7 +225,7 @@ void VirtualMachine::op_condJmp() {
 
 void VirtualMachine::op_setPalette() {
 	uint16_t paletteId = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_setPalette %d", paletteId);
+	//debug(DBG_VM, "op_setPalette %d", paletteId);
 #ifndef NO_VIDEO
 	video->paletteIdRequested = paletteId >> 8;
 #endif
@@ -251,7 +251,7 @@ void VirtualMachine::op_resetThread() {
 	++n;
 	uint8_t a = _scriptPtr.fetchByte();
 
-	debug(DBG_VM, "op_resetThread");
+	//debug(DBG_VM, "op_resetThread");
 
 	if (a == 2) {
 		uint16_t *p = &threadsData[REQUESTED_PC_OFFSET][threadId];
@@ -268,7 +268,7 @@ void VirtualMachine::op_resetThread() {
 
 void VirtualMachine::op_selectVideoPage() {
 	uint8_t frameBufferId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_selectVideoPage %x", frameBufferId);
+	//debug(DBG_VM, "op_selectVideoPage %x", frameBufferId);
 #ifndef NO_VIDEO
 	video->changePagePtr1(frameBufferId);
 #endif
@@ -277,7 +277,7 @@ void VirtualMachine::op_selectVideoPage() {
 void VirtualMachine::op_fillVideoPage() {
 	uint8_t pageId = _scriptPtr.fetchByte();
 	uint8_t color = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_fillVideoPage %x,%x", pageId, color);
+	//debug(DBG_VM, "op_fillVideoPage %x,%x", pageId, color);
 #ifndef NO_VIDEO
 	video->fillPage(pageId, color);
 #endif
@@ -286,7 +286,7 @@ void VirtualMachine::op_fillVideoPage() {
 void VirtualMachine::op_copyVideoPage() {
 	uint8_t srcPageId = _scriptPtr.fetchByte();
 	uint8_t dstPageId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_copyVideoPage %x => %x", srcPageId, dstPageId);
+	//debug(DBG_VM, "op_copyVideoPage %x => %x", srcPageId, dstPageId);
 #ifndef NO_VIDEO
 	video->copyPage(srcPageId, dstPageId, vmVariables[VM_VARIABLE_SCROLL_Y]);
 #endif
@@ -297,7 +297,7 @@ uint32_t lastTimeStamp = 0;
 void VirtualMachine::op_blitFramebuffer() {
 
 	uint8_t pageId = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_blitFramebuffer %x", pageId);
+	//debug(DBG_VM, "op_blitFramebuffer %x", pageId);
 	inp_handleSpecialKeys();
 
   int32_t delay = sys->getTimeStamp() - lastTimeStamp;
@@ -320,7 +320,7 @@ void VirtualMachine::op_blitFramebuffer() {
 }
 
 void VirtualMachine::op_killThread() {
-	debug(DBG_VM, "op_killThread");
+	//debug(DBG_VM, "op_killThread");
 	_scriptPtr.pc = res->segBytecode + 0xFFFF;
 	gotoNextThread = true;
 }
@@ -331,7 +331,7 @@ void VirtualMachine::op_drawString() {
 	uint16_t y = _scriptPtr.fetchByte();
 	uint16_t color = _scriptPtr.fetchByte();
 
-	debug(DBG_VM, "op_drawString %d %d %d %d", stringId, x, y, color);
+	//debug(DBG_VM, "op_drawString %d %d %d %d", stringId, x, y, color);
 #ifndef NO_VIDEO
 	video->drawString(color, x, y, stringId);
 #endif
@@ -340,7 +340,7 @@ void VirtualMachine::op_drawString() {
 void VirtualMachine::op_sub() {
 	uint8_t i = _scriptPtr.fetchByte();
 	uint8_t j = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_sub [%d](%d) -= [%d](%d)", i, vmVariables[i], j, vmVariables[j]);
+	//debug(DBG_VM, "op_sub [%d](%d) -= [%d](%d)", i, vmVariables[i], j, vmVariables[j]);
 	vmVariables[i] -= vmVariables[j];
 }
 
@@ -361,14 +361,14 @@ void VirtualMachine::op_or() {
 void VirtualMachine::op_shl() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t leftShiftValue = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_shl[%d](%d) <<= %d", variableId, vmVariables[variableId], leftShiftValue);
+	//debug(DBG_VM, "op_shl[%d](%d) <<= %d", variableId, vmVariables[variableId], leftShiftValue);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] << leftShiftValue;
 }
 
 void VirtualMachine::op_shr() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t rightShiftValue = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_shr[%d](%d) >>= %d", variableId, vmVariables[variableId], rightShiftValue);
+	//debug(DBG_VM, "op_shr[%d](%d) >>= %d", variableId, vmVariables[variableId], rightShiftValue);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] >> rightShiftValue;
 }
 
@@ -377,7 +377,7 @@ void VirtualMachine::op_playSound() {
 	uint8_t freq = _scriptPtr.fetchByte();
 	uint8_t vol = _scriptPtr.fetchByte();
 	uint8_t channel = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_playSound %d %d %d %d", resourceId, freq, vol, channel);
+	//debug(DBG_VM, "op_playSound %d %d %d %d", resourceId, freq, vol, channel);
 	snd_playSound(resourceId, freq, vol, channel);
 }
 
@@ -401,7 +401,7 @@ void VirtualMachine::op_playMusic() {
 	uint16_t resNum = _scriptPtr.fetchWord();
 	uint16_t delay = _scriptPtr.fetchWord();
 	uint8_t pos = _scriptPtr.fetchByte();
-	debug(DBG_VM, "op_playMusic %d %d %d", resNum, delay, pos);
+	//debug(DBG_VM, "op_playMusic %d %d %d", resNum, delay, pos);
 	snd_playMusic(resNum, delay, pos);
 }
 
@@ -486,14 +486,15 @@ void VirtualMachine::hostFrame() {
 			_stackPtr = 0;
 
 			gotoNextThread = false;
-			debug(DBG_VM, "hostFrame() i=0x%02X n=0x%02X *p=0x%02X p=%x", threadId, n, *_scriptPtr.pc,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
+			// debug(DBG_VM, "hostFrame() i=0x%02X n=0x%02X *p=0x%02X p=%x", threadId, n, *_scriptPtr.pc,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
+      // debug(DBG_VM, "hostFrame() i=0x%02X n=0x%02X", threadId, n);
 			executeThread(threadId);
 
 			//Since .pc is going to be modified by this next loop iteration, we need to save it.
 			threadsData[PC_OFFSET][threadId] = _scriptPtr.pc - res->segBytecode;
 
 
-			debug(DBG_VM, "hostFrame() i=0x%02X pos=0x%X", threadId, threadsData[PC_OFFSET][threadId]);
+			// debug(DBG_VM, "hostFrame() i=0x%02X pos=0x%X", threadId, threadsData[PC_OFFSET][threadId]);
 			if (sys->input.quit) {
 				break;
 			}
@@ -525,7 +526,7 @@ void VirtualMachine::executeThread(int threadId) {
 				y = 199;
 				x += h;
 			}
-			debug(DBG_VM, "op_Polygon (vid_opcd_0x80) @%04x",off);
+			// debug(DBG_VM, "op_Polygon (vid_opcd_0x80) @%04x",off);
 
 			// This switch the polygon database to "cinematic" and probably draws a black polygon
 			// over all the screen.
@@ -597,9 +598,9 @@ void VirtualMachine::executeThread(int threadId) {
         }
 
 			}
-			debug(DBG_VM, "vid_opcd_0x40 : off=0x%X x=%d y=%d useSegVideo2:%d segCinematic:%x",
-						off, x, y, (int)res->_useSegVideo2, res->segCinematic );
-			debug(DBG_VM, "op_Polygon (vid_opcd_0x40) @%04x",off);
+			// debug(DBG_VM, "vid_opcd_0x40 : off=0x%X x=%d y=%d useSegVideo2:%d segCinematic:%x",
+			//			off, x, y, (int)res->_useSegVideo2, res->segCinematic );
+			// debug(DBG_VM, "op_Polygon (vid_opcd_0x40) @%04x",off);
 #ifndef NO_VIDEO
 			video->setDataBuffer(res->_useSegVideo2 ? res->_segVideo2 : res->segCinematic, off);
 			video->readAndDrawPolygon(0xFF, zoom, Point(x, y));
@@ -671,7 +672,7 @@ void VirtualMachine::inp_updatePlayer() {
 	}
 
 	vmVariables[VM_VARIABLE_HERO_ACTION] = button;
-	vmVariables[VM_VARIABLE_HERO_ACTION_POS_MASK] = m;
+  vmVariables[VM_VARIABLE_HERO_ACTION_POS_MASK] = m;
 }
 
 void VirtualMachine::inp_handleSpecialKeys() {
@@ -705,7 +706,7 @@ void VirtualMachine::inp_handleSpecialKeys() {
 void VirtualMachine::snd_playSound(uint16_t resNum, uint8_t freq, uint8_t vol, uint8_t channel) {
 
 	debug(DBG_SND, "snd_playSound(0x%X, %d, %d, %d)", resNum, freq, vol, channel);
-  std::cout << "[snd_playSound] resNum: " << resNum << '\n';
+  // std::cout << "[snd_playSound] resNum: " << resNum << '\n';
 
 #ifndef NO_MUSIC
 	MemEntry *me = &res->_memList[resNum];

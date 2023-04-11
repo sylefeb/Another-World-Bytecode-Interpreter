@@ -131,7 +131,7 @@ void Engine::init(int partId) {
       table[se->id]   = next;
       next += h;
       table[se->id+1] = next;
-      debug(DBG_VM, "text %d from %x to %x",se->id,table[se->id],table[se->id+1]);
+      // debug(DBG_VM, "text %d from %x to %x",se->id,table[se->id],table[se->id+1]);
       // draw string
       std::vector<uint8_t> draw;
       draw.resize( h * 160 /*4bpp, full row*/, 0 );
@@ -168,7 +168,7 @@ void Engine::init(int partId) {
 #endif
     }
     table.back() = next; // close the table
-    debug(DBG_VM, "total string table size: %d",next*320 + sizeof(short)*table.size());
+    //debug(DBG_VM, "total string table size: %d",next*320 + sizeof(short)*table.size());
 
     // dump file
     FILE *f = fopen("stringtable.raw","wb");
@@ -176,7 +176,7 @@ void Engine::init(int partId) {
     check_written += fwrite(&table[0],1,table.size()*sizeof(short),f);
     for (int i=0;i<buffers.size();++i) {
       if (!buffers[i].empty()) {
-        debug(DBG_VM, "[writing] %d at %x (%d bytes)",i,check_written,buffers[i].size());
+        //debug(DBG_VM, "[writing] %d at %x (%d bytes)",i,check_written,buffers[i].size());
         check_written += fwrite(&(buffers[i][0]),1,buffers[i].size(),f);
       }
     }
