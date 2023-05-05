@@ -46,6 +46,7 @@ static bool parseOption(const char *arg, const char *longCmd, const char **opt) 
 */
 //extern System *System_SDL_create();
 extern System *stub ;//= System_SDL_create();
+extern bool g_extracting;
 
 #undef main
 int main(int argc, char *argv[]) {
@@ -57,7 +58,10 @@ int main(int argc, char *argv[]) {
 		if (strlen(argv[i]) >= 2) { // if at least '--'
 			opt |= parseOption(argv[i], "datapath=", &dataPath);
 			opt |= parseOption(argv[i], "savepath=", &savePath);
-      opt |= parseOption(argv[i], "extract=",  &partId);
+      if (parseOption(argv[i], "extract=",  &partId)) {
+        g_extracting = true;
+        opt |= true;
+      }
 		}
 		if (!opt) {
 			printf("%s",USAGE);
@@ -67,7 +71,7 @@ int main(int argc, char *argv[]) {
 
 	//FCS
 	// g_debugMask = DBG_INFO | DBG_VM | DBG_VIDEO; // DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND
-	g_debugMask = 0; // DBG_VM ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
+	g_debugMask = 0; //DBG_VM ;//DBG_INFO |  DBG_VM | DBG_BANK | DBG_VIDEO | DBG_SER | DBG_SND ;
 
 	Engine* e = new Engine(stub, dataPath, savePath);
 	e->init(atoi(partId));

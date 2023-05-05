@@ -29,6 +29,9 @@
 
 #include <iostream>
 
+bool g_extracting = false; // SL: set to true by main if extracting a part
+                           //     this is used to auto-stop execution
+
 // #define NO_VIDEO
 #define NO_MUSIC
 
@@ -212,7 +215,7 @@ void VirtualMachine::op_condJmp() {
 		break;
 	}
 
-	debug(DBG_VM, "op_condJmp b[%d]: %d a: %d expr:%d", var,b,a, expr);
+	//debug(DBG_VM, "op_condJmp b[%d]: %d a: %d expr:%d", var,b,a, expr);
 
 	if (expr) {
   	uint16_t pcOffset = _scriptPtr.fetchWord();
@@ -268,7 +271,7 @@ void VirtualMachine::op_resetThread() {
 
 void VirtualMachine::op_selectVideoPage() {
 	uint8_t frameBufferId = _scriptPtr.fetchByte();
-	//debug(DBG_VM, "op_selectVideoPage %x", frameBufferId);
+	debug(DBG_VM, "op_selectVideoPage %x", frameBufferId);
 #ifndef NO_VIDEO
 	video->changePagePtr1(frameBufferId);
 #endif
@@ -277,7 +280,7 @@ void VirtualMachine::op_selectVideoPage() {
 void VirtualMachine::op_fillVideoPage() {
 	uint8_t pageId = _scriptPtr.fetchByte();
 	uint8_t color = _scriptPtr.fetchByte();
-	//debug(DBG_VM, "op_fillVideoPage %x,%x", pageId, color);
+	debug(DBG_VM, "op_fillVideoPage %x,%x", pageId, color);
 #ifndef NO_VIDEO
 	video->fillPage(pageId, color);
 #endif
@@ -286,18 +289,19 @@ void VirtualMachine::op_fillVideoPage() {
 void VirtualMachine::op_copyVideoPage() {
 	uint8_t srcPageId = _scriptPtr.fetchByte();
 	uint8_t dstPageId = _scriptPtr.fetchByte();
-	//debug(DBG_VM, "op_copyVideoPage %x => %x", srcPageId, dstPageId);
+	debug(DBG_VM, "op_copyVideoPage %x => %x", srcPageId, dstPageId);
 #ifndef NO_VIDEO
 	video->copyPage(srcPageId, dstPageId, vmVariables[VM_VARIABLE_SCROLL_Y]);
 #endif
 }
 
+static int countDown = 16;
 
 uint32_t lastTimeStamp = 0;
 void VirtualMachine::op_blitFramebuffer() {
 
 	uint8_t pageId = _scriptPtr.fetchByte();
-	//debug(DBG_VM, "op_blitFramebuffer %x", pageId);
+	debug(DBG_VM, "op_blitFramebuffer %x", pageId);
 	inp_handleSpecialKeys();
 
   int32_t delay = sys->getTimeStamp() - lastTimeStamp;
@@ -317,6 +321,14 @@ void VirtualMachine::op_blitFramebuffer() {
 #ifndef NO_VIDEO
 	video->updateDisplay(pageId);
 #endif
+
+  // auto-stop when extracting data
+  if (g_extracting) {
+    if (countDown-- == 0) {
+      std::cerr << "\nData extraction should be complete for this part.\n";
+      exit (0);
+    }
+  }
 }
 
 void VirtualMachine::op_killThread() {
@@ -347,14 +359,14 @@ void VirtualMachine::op_sub() {
 void VirtualMachine::op_and() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t n = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_and [%d](%d) &= %d", variableId, vmVariables[variableId], n);
+	//debug(DBG_VM, "op_and [%d](%d) &= %d", variableId, vmVariables[variableId], n);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] & n;
 }
 
 void VirtualMachine::op_or() {
 	uint8_t variableId = _scriptPtr.fetchByte();
 	uint16_t value = _scriptPtr.fetchWord();
-	debug(DBG_VM, "op_or [%d](%d) |= %d", variableId, vmVariables[variableId], value);
+	//debug(DBG_VM, "op_or [%d](%d) |= %d", variableId, vmVariables[variableId], value);
 	vmVariables[variableId] = (uint16_t)vmVariables[variableId] | value;
 }
 
@@ -381,8 +393,13 @@ void VirtualMachine::op_playSound() {
 	snd_playSound(resourceId, freq, vol, channel);
 }
 
+extern int numstored_framebuffers; // in resource.cpp
+extern int framebuffer_ids[4];
+
 void VirtualMachine::op_updateMemList() {
+  uint8_t *patch_ptr  = _scriptPtr.pc;
 	uint16_t resourceId = _scriptPtr.fetchWord();
+  // std::cerr << "[vm] op_updateMemList " << resourceId << '\n';
 	//debug(DBG_VM, "op_updateMemList %d", resourceId);
 #if 1
 	if (resourceId == 0) {
@@ -392,7 +409,27 @@ void VirtualMachine::op_updateMemList() {
 #endif
 		res->invalidateRes();
 	} else {
+
+    int numfb_before = numstored_framebuffers;
 		res->loadPartsOrMemoryEntry(resourceId);
+    int numfb_after  = numstored_framebuffers;
+
+    // pre-render buffers
+    res->preRenderBuffers();
+
+    /// Here we check whether a pre-computed bitmap was loaded
+    if (numfb_after > numfb_before) {
+      // yes: we patch the code with a different resourceId corresponding
+      // to where the buffer is stored in the pre-rendered buffers
+      uint16_t v = 32768 | framebuffer_ids[numfb_before];
+      *(uint8_t*)(patch_ptr+0) = (v>>8);  // stored as two byte due to endianess
+      *(uint8_t*)(patch_ptr+1) = (v&255);
+      // fprintf(stderr,"[vm] patching at %llx with %x\n",(unsigned long long)(patch_ptr),v);
+    }
+
+    // dump updated data pack
+    res->dumpDataPack();
+
 	}
 #endif
 }
@@ -407,7 +444,7 @@ void VirtualMachine::op_playMusic() {
 
 void VirtualMachine::initForPart(uint16_t partId) {
 
-  std::cerr << "    ******* initForPart ******* " << partId << '\n';
+  // std::cerr << "    ******* initForPart ******* " << partId << '\n';
 #ifndef NO_MUSIC
 	player->stop();
 	mixer->stopAll();
@@ -512,7 +549,7 @@ void VirtualMachine::executeThread(int threadId) {
 	while (!gotoNextThread) {
 
 		uint8_t opcode = _scriptPtr.fetchByte();
-    debug(DBG_VM, "[thread %3d] opcode:%02x (@%06x)",threadId,opcode,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
+    //debug(DBG_VM, "[thread %3d] opcode:%02x (@%06x)",threadId,opcode,(unsigned long long)(_scriptPtr.pc - res->_memPtrStart));
 
 		// 1000 0000 is set
 		if (opcode & 0x80)

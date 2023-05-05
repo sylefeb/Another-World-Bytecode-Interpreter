@@ -24,7 +24,15 @@
 #include "util.h"
 #include "parts.h"
 
+#include <vector>
+#include <string>
 #include <iostream>
+#include <SDL.h>
+
+
+uint8_t  framebuffers[4*64000];
+int      framebuffer_ids[4] = {-1,-1,-1,-1};
+int      numstored_framebuffers = 0;
 
 // #define USE_DUMP
 
@@ -172,7 +180,7 @@ void Resource::readEntries() {
 */
 void Resource::loadMarkedAsNeeded() {
 #ifndef USE_DUMP
-  std::cerr << "    Resource::loadMarkedAsNeeded [in]\n";
+  // std::cerr << "    Resource::loadMarkedAsNeeded [in]\n";
 
 	while (1) {
 
@@ -200,11 +208,41 @@ void Resource::loadMarkedAsNeeded() {
 
 		uint8_t *loadDestination = NULL;
 		if (me->type == RT_POLY_ANIM) {
-			std::cerr << "    Resource::loadMarkedAsNeeded RT_POLY_ANIM ############################### \n";
+			// std::cerr << "    Resource::loadMarkedAsNeeded RT_POLY_ANIM ############################### \n";
+      // std::cout << "-----> loading bitmap? " << ((size_t)me - (size_t)_memList)/sizeof(MemEntry) << ' ';
+      // std::cout << "size: " << me->size << " bytes.\n";
+      // decode background into a byte image
+      uint8_t pixels[32000];
+      readBank(me, pixels);
+      if (numstored_framebuffers == 4) {
+        std::cerr << "[fatal] Too many pre-computed framebffers?!\n";
+        exit (-1);
+      }
+      uint8_t *image = framebuffers + 64000*(numstored_framebuffers++);
+      {
+      for (int j=0;j<200;++j) {
+        for (int i=0;i<320;i++) {
+          uint8_t idx = 0;
+          for (int plane = 3; plane >=0 ; --plane) {
+            uint8_t by = pixels[plane*8000 + ((i+j*320)>>3)];
+            idx = (idx<<1) | ((by>>(7-(i&7))) & 1);
+          }
+          image[(i+j*320)] = (idx) | 16;
+        }
+      }
+      }
+#if 0
+      // image output for debug
+      static int cnt = 0;
+      SDL_Surface *srf = SDL_CreateRGBSurfaceWithFormat(0,320,200,24, SDL_PIXELFORMAT_RGB24);
+      for (int n=0;n<64000;++n) { for (int c=0;c<3;++c) { ((uint8_t*)srf->pixels)[n*3+c] = image[n]; } }
+      SDL_SaveBMP(srf,(std::string("test") + std::to_string(cnt++) + ".bmp").c_str());
+      SDL_FreeSurface(srf);
+#endif
 			loadDestination = _vidCurPtr;
 		} else {
 			loadDestination = _scriptCurPtr;
-      std::cerr << "    Resource::loadMarkedAsNeeded @" << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+      // std::cerr << "    Resource::loadMarkedAsNeeded @" << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 			if (me->size > _vidBakPtr - _scriptCurPtr) {
 				warning("Resource::load() not enough memory");
 				me->state = MEMENTRY_STATE_NOT_NEEDED;
@@ -227,14 +265,14 @@ void Resource::loadMarkedAsNeeded() {
           //std::cout << "size: " << me->size << " bytes.\n";
         }
 				me->bufPtr = loadDestination;
-				me->state = MEMENTRY_STATE_LOADED;
+				me->state  = MEMENTRY_STATE_LOADED;
 				_scriptCurPtr += me->size;
 			}
 		}
 
 	}
 
-  std::cerr << "    Resource::loadMarkedAsNeeded [out]\n";
+  // std::cerr << "    Resource::loadMarkedAsNeeded [out]\n";
 #endif
 }
 
@@ -264,6 +302,131 @@ void Resource::invalidateAll() {
 #endif
 }
 
+// --------------------------------------------------------------------------
+// SL: Pre-render:
+//  - strings as bitmaps to simplify hardware renderer,
+//  - pre-rendered framebuffer from the engine.
+// --------------------------------------------------------------------------
+void Resource::preRenderBuffers() {
+
+  std::vector<unsigned short>        table;
+  std::vector<std::vector<uint8_t> > buffers;
+  int table_bytes         = (END_OF_STRING_DICTIONARY + 2 + numstored_framebuffers) * 2 /*short*/;
+  int table_size_in_lines = (table_bytes / 320) + 1;
+  table_bytes             = table_size_in_lines * 320;
+  table  .resize(table_bytes>>1, 0);
+  if (table.size() < END_OF_STRING_DICTIONARY + 1) {
+      std::cerr << "[pre-renderer] improper table size\n";
+      exit (-1);
+  }
+  buffers.resize(END_OF_STRING_DICTIONARY + 1 + numstored_framebuffers);
+  int next = table_size_in_lines;
+  // reorder
+  std::vector<const StrEntry *> entries;
+  entries.resize(END_OF_STRING_DICTIONARY + 1, nullptr);
+  for (const StrEntry *se = Video::_stringsTableEng; se->id != END_OF_STRING_DICTIONARY; ++se) {
+    entries[se->id] = se;
+  }
+  int max_id = -1;
+  for (int s=0;s<entries.size();++s) {
+    const StrEntry *se = entries[s];
+    if (se == nullptr) continue;
+    if (se->id != s) {
+      std::cerr << "[pre-renderer] index error\n";
+      exit (-1);
+    }
+    // determine buffer height (in pixels)
+    int h = 8; // font is 8 pixels tall
+    int len = strlen(se->str);
+    for (int i = 0; i < len; ++i) { if (se->str[i] == '\n') { h += 8; } }
+    // allocate buffer
+    buffers[se->id].resize( h * 320 /*full row*/, 0 );
+    // add to table
+    if (next > 65535) {
+      std::cerr << "[pre-renderer] index too large\n";
+      exit (-1);
+    }
+    max_id          = se->id > max_id ? se->id : max_id;
+    table[se->id]   = next;
+    next += h;
+    table[se->id+1] = next; // ensures last is set
+    // debug(DBG_VM, "pre-rendered text  buffer %d from %x to %x",se->id,table[se->id],table[se->id+1]);
+    // draw string
+    std::vector<uint8_t> draw;
+    draw.resize( h * 160 /*4bpp, full row*/, 0 );
+    uint16_t x = 0, y = 0;
+    for (int i = 0; i < len; ++i) {
+      if (se->str[i] == '\n') {
+        y += 8;
+        x = 0;
+        continue;
+      }
+      video->drawChar(se->str[i], x, y, 15, &draw[0]);
+      x++;
+    }
+    // convert in byte buffer
+    for (int j=0;j<h;++j) {
+      for (int i=0;i<160;++i) {
+        buffers[se->id][(i<<1)+0+j*320] =  (draw[i+j*160] & 0xf0) ? (16 | 0xff) : 0;
+        buffers[se->id][(i<<1)+1+j*320] =  (draw[i+j*160] & 0x0f) ? (16 | 0xff) : 0;
+      }
+    }
+  }
+
+  // add framebuffers
+  for (int f=0;f<numstored_framebuffers;++f) {
+    int id = max_id + 1 + f;
+    framebuffer_ids[f] = id;
+    table[id]   = next;
+    next += 200;
+    if (next > 65535) {
+      std::cerr << "[pre-renderer] index too large\n";
+      exit (-1);
+    }
+    table[id+1] = next; // ensures last is set
+    debug(DBG_VM, "pre-rendered frame buffer %d from %x to %x",id,table[id],table[id+1]);
+    // allocate buffer
+    buffers[id].resize( 320 *200 , 0 );
+    // copy data
+    memcpy(&buffers[id][0],framebuffers + f*64000,64000);
+  }
+
+  table.back() = next; // close the table
+  // debug(DBG_VM, "total pre-render (table+data): %d",next*320 + sizeof(short)*table.size());
+
+#if 0
+    // image output for debug
+    for (int b = 0; b <buffers.size(); ++b) {
+      if (buffers[b].empty()) continue;
+      int h = buffers[b].size()/320;
+      SDL_Surface *srf = SDL_CreateRGBSurfaceWithFormat(0,320,h,24, SDL_PIXELFORMAT_RGB24);
+      uint8_t *ptr = (uint8_t *)srf->pixels;
+      for (int j=0;j<h;++j) {
+        for (int i=0;i<320;++i) {
+          ptr[(i+j*320)*3+0] = buffers[b][i+j*320];
+          ptr[(i+j*320)*3+1] = buffers[b][i+j*320];
+          ptr[(i+j*320)*3+2] = buffers[b][i+j*320];
+        }
+      }
+      SDL_SaveBMP(srf,(std::string("buffer") + std::to_string(b) + ".bmp").c_str());
+      SDL_FreeSurface(srf);
+    }
+#endif
+
+  // dump file
+  FILE *f = fopen("stringtable.raw","wb");
+  int check_written = 0;
+  check_written += fwrite(&table[0],1,table.size()*sizeof(short),f);
+  for (int i=0;i<buffers.size();++i) {
+    if (!buffers[i].empty()) {
+      // debug(DBG_VM, "[writing] %d at %x (%d bytes)",i,check_written,buffers[i].size());
+      check_written += fwrite(&(buffers[i][0]),1,buffers[i].size(),f);
+    }
+  }
+  fclose(f);
+
+}
+
 /* This method serves two purpose:
     - Load parts in memory segments (palette,code,video1,video2)
 	           or
@@ -276,12 +439,12 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
 #ifndef USE_DUMP
   auto prev = _scriptCurPtr;
 
-  std::cerr << "    Resource::loadPartsOrMemoryEntry [in] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+  // std::cerr << "    Resource::loadPartsOrMemoryEntry [in] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 
 	if (resourceId > _numMemList) {
 
 		requestedNextPart = resourceId;
-    std::cerr << "    Resource::loadPartsOrMemoryEntry [requestedNextPart]\n";
+    // std::cerr << "    Resource::loadPartsOrMemoryEntry [requestedNextPart]\n";
 
 	} else {
 
@@ -293,19 +456,23 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
 		}
 
 	}
+}
 
+void Resource::dumpDataPack()
+{
   // ---------------------------------------------------
   // dump loaded content in a file (latest contains all)
   // ---------------------------------------------------
-  if (_scriptCurPtr > prev) {
+  /*if (_scriptCurPtr > prev)*/ {
     FILE *dump = NULL;
   	// dump raw data
     dump = fopen("data.raw","wb");
     if (dump) {
 
       size_t sz_written  = 0;
-      uint32_t step_over = 4*sizeof(uint32_t); // to step over the 4 offsets we add at the beginning
 
+#if 0
+      uint32_t step_over = 4*sizeof(uint32_t); // to step over the 4 offsets we add at the beginning
       const uint32_t offs_max = 1<<17;
 
       uint32_t offs = (uint32_t)(segBytecode - _memPtrStart) + step_over;
@@ -323,6 +490,7 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
       offs = (uint32_t)(_segVideo2 - _memPtrStart) + step_over;
       if (_segVideo2 && offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
       sz_written += fwrite(&offs,1,sizeof(offs),dump);
+#endif
 
       sz_written += fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
 
@@ -342,7 +510,7 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
         sz_written += n;
       }
 
-      // append strings
+      // append pre-rendered buffers
       {
         FILE *strs = NULL;
         strs = fopen("stringtable.raw","rb");
@@ -360,10 +528,27 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
       }
 
       fclose(dump);
+
+      // output data.si
+      {
+        FILE *si = fopen("data.si","w");
+        if (si) {
+          unsigned int offs = (unsigned int)(segBytecode - _memPtrStart);
+              fprintf(si,"$$segBytecode = %d\n",offs);
+          offs = segPalettes - _memPtrStart;
+              fprintf(si,"$$segPalettes = %d\n",offs);
+          offs = segCinematic - _memPtrStart;
+              fprintf(si,"$$segCinematic = %d\n",offs);
+          offs = _segVideo2 - _memPtrStart;
+              fprintf(si,"$$segVideo2 = %d\n",offs);
+          fclose(si);
+        }
+      }
+
     }
 
   }
-  std::cerr << "    Resource::loadPartsOrMemoryEntry [out] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+  // std::cerr << "    Resource::loadPartsOrMemoryEntry [out] " << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 #endif
 
 }
@@ -371,12 +556,12 @@ void Resource::loadPartsOrMemoryEntry(uint16_t resourceId) {
 
 void Resource::loadDump(const char *f)
 {
-	std::cerr << "    Resource::loadDump [in]\n";
+	// std::cerr << "    Resource::loadDump [in]\n";
   FILE *dump = NULL;
   dump = fopen(f,"rb");
   if (dump) {
     auto nbytes = fread(_memPtrStart,1,MEM_BLOCK_SIZE,dump);
-    std::cerr << "read " << nbytes << '\n';
+    // std::cerr << "read " << nbytes << '\n';
     _scriptCurPtr = _memPtrStart + nbytes - sizeof(unsigned long long)*4;
     segBytecode   = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*4);
     segPalettes   = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*3);
@@ -384,7 +569,7 @@ void Resource::loadDump(const char *f)
     _segVideo2    = _memPtrStart + *(unsigned long long*)(_memPtrStart + nbytes - sizeof(unsigned long long)*1);
     fclose(dump);
   }
-	std::cerr << "    Resource::loadDump [out] "  << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
+	// std::cerr << "    Resource::loadDump [out] "  << std::hex << (unsigned long long)(_scriptCurPtr-_memPtrStart) << std::dec << "\n";
 }
 
 
@@ -397,7 +582,7 @@ void Resource::setupPart(uint16_t partId) {
 	if (partId == currentPartId)
 		return;
 
-  std::cerr << "    Resource::setupPart [in]\n";
+  // std::cerr << "    Resource::setupPart [in]\n";
 
 	if (partId < GAME_PART_FIRST || partId > GAME_PART_LAST)
 		error("Resource::setupPart() ec=0x%X invalid partId", partId);
@@ -454,7 +639,7 @@ void Resource::setupPart(uint16_t partId) {
 
 #endif
 
-  std::cerr << "    Resource::setupPart [out]\n";
+  // std::cerr << "    Resource::setupPart [out]\n";
 
 }
 

@@ -106,6 +106,8 @@ struct Resource {
 	void allocMemBlock();
 	void freeMemBlock();
 
+  void preRenderBuffers();
+  void dumpDataPack();
   void loadDump(const char *f);
 
 	void saveOrLoad(Serializer &ser);

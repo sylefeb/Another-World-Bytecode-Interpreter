@@ -41,18 +41,18 @@ bool Bank::read(const MemEntry *me, uint8_t *buf) {
 	// Depending if the resource is packed or not we
 	// can read directly or unpack it.
 	if (me->packedSize == me->size) {
-    std::cerr << "    bank " << (int)me->bankId << " => unpacked bank\n";
+    // std::cerr << "    bank " << (int)me->bankId << " => unpacked bank\n";
 		f.read(buf, me->packedSize);
 		ret = true;
 	} else {
-    std::cerr << "    bank " << (int)me->bankId << " => packed bank \n";
+    // std::cerr << "    bank " << (int)me->bankId << " => packed bank \n";
 		f.read(buf, me->packedSize);
 		_startBuf = buf;
 		_iBuf = buf + me->packedSize - 4;
 		ret = unpack();
 	}
-  std::cerr << "    entry offset: " << me->bankOffset << '\n';
-  std::cerr << "    entry size  : " << me->size << '\n';
+  // std::cerr << "    entry offset: " << me->bankOffset << '\n';
+  // std::cerr << "    entry size  : " << me->size << '\n';
 
 	return ret;
 }
