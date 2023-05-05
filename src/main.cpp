@@ -20,6 +20,7 @@
 #include "sys.h"
 #include "util.h"
 
+#include <SDL.h>
 
 static const char *USAGE =
 	"Raw - Another World Interpreter\n"
@@ -48,7 +49,7 @@ static bool parseOption(const char *arg, const char *longCmd, const char **opt) 
 extern System *stub ;//= System_SDL_create();
 extern bool g_extracting;
 
-#undef main
+// #undef main
 int main(int argc, char *argv[]) {
 	const char *dataPath = ".";
 	const char *savePath = ".";

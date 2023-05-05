@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 add_definitions(-DAUTO_DETECT_PLATFORM)
 add_definitions(-DBYPASS_PROTECTION)
+
 set(CMAKE_CXX_FLAGS " -Os -g -fno-rtti -fno-exceptions -Wall -Wno-unknown-pragmas -Wshadow -Wundef -Wwrite-strings -Wnon-virtual-dtor -Wno-multichar")
 
 add_executable(raw
@@ -24,8 +25,8 @@ add_executable(raw
         src/vm.cpp
 )
 
-add_subdirectory(SDL)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/SDL/include)
+find_package(SDL2 REQUIRED)
+include_directories(${SDL2_INCLUDE_DIRS})
+target_link_libraries(raw ${SDL2_LIBRARIES})
 
-target_link_libraries(raw SDL2)
 target_link_libraries(raw z)
