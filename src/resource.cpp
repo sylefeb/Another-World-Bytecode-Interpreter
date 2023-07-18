@@ -29,6 +29,8 @@
 #include <iostream>
 #include <SDL.h>
 
+bool g_data_offsets = false; // SL: set to true by main if the data pack for
+                             //     a part should contain data offsets
 
 uint8_t  framebuffers[4*64000];
 int      framebuffer_ids[4] = {-1,-1,-1,-1};
@@ -471,76 +473,170 @@ void Resource::dumpDataPack()
 
       size_t sz_written  = 0;
 
-#if 0
-      uint32_t step_over = 4*sizeof(uint32_t); // to step over the 4 offsets we add at the beginning
-      const uint32_t offs_max = 1<<17;
+      if (g_data_offsets) {
 
-      uint32_t offs = (uint32_t)(segBytecode - _memPtrStart) + step_over;
-      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
-      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // ------ second version without data offsets
 
-      offs = (uint32_t)(segPalettes - _memPtrStart) + step_over;
-      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
-      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // reorder data
+        // -> compute all data segments start and length
+        uint32_t byteCode_size  = segPalettes - segBytecode;
+        //std::cerr << "byteCode len: " << byteCode_size << '\n';
+        uint32_t palette_size   = ((_segVideo2 != NULL) ? _segVideo2 : _scriptCurPtr) - segPalettes;
+        //std::cerr << "palette len: " << palette_size << '\n';
+        uint32_t cinematic_size = segBytecode  - segCinematic;
+        //std::cerr << "cinematic len: " << cinematic_size << '\n';
+        uint32_t video2_size=0;
+        if (_segVideo2 != NULL) {
+          video2_size  = _scriptCurPtr - _segVideo2;
+          //std::cerr << "video2 len: " << video2_size << '\n';
+        }
+        // prepare a copy of the data
+        // -> alloc
+        uint8_t *tmp = (uint8_t*)malloc(_scriptCurPtr-_memPtrStart);
+        uint8_t *cur = tmp;
+        // -> copy reordered data segments
+        memcpy(cur, segBytecode, byteCode_size );
+        cur += byteCode_size;
+        memcpy(cur, segCinematic, cinematic_size );
+        cur += cinematic_size;
+        memcpy(cur, segPalettes, palette_size );
+        cur += palette_size;
+        if (_segVideo2 != NULL) {
+          memcpy(cur, _segVideo2, video2_size );
+        }
 
-      offs = (uint32_t)(segCinematic - _memPtrStart) + step_over;
-      if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
-      sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // write reordered data
+        sz_written += fwrite(tmp,1,_scriptCurPtr-_memPtrStart,dump);
 
-      offs = (uint32_t)(_segVideo2 - _memPtrStart) + step_over;
-      if (_segVideo2 && offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
-      sz_written += fwrite(&offs,1,sizeof(offs),dump);
-#endif
+        // pad 1MB
+        uint8_t zero = 0;
+        while (sz_written < (1<<20)) {
+          size_t n = fwrite(&zero,1,1,dump);
+          if (n == 0) {
+            std::cerr << "ERROR: write error while packaging data!\n";
+            exit (-1);
+          }
+          sz_written += n;
+        }
 
-      sz_written += fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
-
-      if (sz_written > (1<<20)) {
-        std::cerr << "ERROR: data package exceeds 1MB!\n";
-        exit (-1);
-      }
-
-      // pad 1MB
-      uint8_t zero = 0;
-      while (sz_written < (1<<20)) {
-        size_t n = fwrite(&zero,1,1,dump);
-        if (n == 0) {
-          std::cerr << "ERROR: write error while packaging data!\n";
+        if (sz_written > (1<<20)) {
+          std::cerr << "ERROR: data package exceeds 1MB!\n";
           exit (-1);
         }
-        sz_written += n;
-      }
 
-      // append pre-rendered buffers
-      {
-        FILE *strs = NULL;
-        strs = fopen("stringtable.raw","rb");
-        if (strs == NULL) {
-          std::cerr << "ERROR: cannot find strings table file (stringtable.raw)!\n";
+        // append pre-rendered buffers
+        {
+          FILE *strs = NULL;
+          strs = fopen("stringtable.raw","rb");
+          if (strs == NULL) {
+            std::cerr << "ERROR: cannot find strings table file (stringtable.raw)!\n";
+            exit (-1);
+          }
+          while (1) { // copy (yes, this is ugly and slow, but simple)
+            uint8_t by;
+            size_t n = fread(&by,1,1,strs);
+            if (n == 0) break;
+            n = fwrite(&by,1,1,dump);
+            if (n == 0) {
+              std::cerr << "ERROR: write error while packaging data!\n";
+              exit (-1);
+            }
+            sz_written += n;
+          }
+          fclose(strs);
+        }
+
+        if (sz_written > (2<<20)) {
+          std::cerr << "ERROR: data package exceeds 2MB!\n";
           exit (-1);
         }
-        while (1) { // copy (yes, this is ugly and slow, but simple)
-          uint8_t by;
-          size_t n = fread(&by,1,1,strs);
-          if (n == 0) break;
-          fwrite(&by,1,1,dump);
+
+        // pad 2MB - 32 bytes
+        while (sz_written < (2<<20) - 32) {
+          size_t n = fwrite(&zero,1,1,dump);
+          if (n == 0) {
+            std::cerr << "ERROR: write error while packaging data!\n";
+            exit (-1);
+          }
+          sz_written += n;
         }
-        fclose(strs);
+
+        // write offsets (32 bytes)
+        const uint32_t offs_max = 1<<17;
+        // bytecode
+        uint32_t offs = (uint32_t)(0);
+        if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+        sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // palettes
+        offs = (uint32_t)(cinematic_size+byteCode_size);
+        if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+        sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // cinematic
+        offs = (uint32_t)(byteCode_size);
+        if (offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+        sz_written += fwrite(&offs,1,sizeof(offs),dump);
+        // video2
+        offs = (uint32_t)(byteCode_size+cinematic_size+palette_size);
+        if (_segVideo2 && offs > offs_max) { std::cerr << "ERROR: offset exceeds max!\n" << offs << '\n'; exit (-1); }
+        sz_written += fwrite(&offs,1,sizeof(offs),dump);
+
+
+      } else {
+
+        // ------ first version without data offsets
+
+        // write raw data
+        sz_written += fwrite(_memPtrStart,1,_scriptCurPtr-_memPtrStart,dump);
+
+        // pad 1MB
+        uint8_t zero = 0;
+        while (sz_written < (1<<20)) {
+          size_t n = fwrite(&zero,1,1,dump);
+          if (n == 0) {
+            std::cerr << "ERROR: write error while packaging data!\n";
+            exit (-1);
+          }
+          sz_written += n;
+        }
+
+        if (sz_written > (1<<20)) {
+          std::cerr << "ERROR: data package exceeds 1MB!\n";
+          exit (-1);
+        }
+
+        // append pre-rendered buffers
+        {
+          FILE *strs = NULL;
+          strs = fopen("stringtable.raw","rb");
+          if (strs == NULL) {
+            std::cerr << "ERROR: cannot find strings table file (stringtable.raw)!\n";
+            exit (-1);
+          }
+          while (1) { // copy (yes, this is ugly and slow, but simple)
+            uint8_t by;
+            size_t n = fread(&by,1,1,strs);
+            if (n == 0) break;
+            fwrite(&by,1,1,dump);
+          }
+          fclose(strs);
+        }
+
       }
 
       fclose(dump);
 
-      // output data.si
-      {
+      /*if (!g_data_offsets)*/ {
+        // output data.si
         FILE *si = fopen("data.si","w");
         if (si) {
           unsigned int offs = (unsigned int)(segBytecode - _memPtrStart);
-              fprintf(si,"$$segBytecode = %d\n",offs);
+          fprintf(si,"$$segBytecode = %d\n",offs);
           offs = segPalettes - _memPtrStart;
-              fprintf(si,"$$segPalettes = %d\n",offs);
+          fprintf(si,"$$segPalettes = %d\n",offs);
           offs = segCinematic - _memPtrStart;
-              fprintf(si,"$$segCinematic = %d\n",offs);
+          fprintf(si,"$$segCinematic = %d\n",offs);
           offs = _segVideo2 - _memPtrStart;
-              fprintf(si,"$$segVideo2 = %d\n",offs);
+          fprintf(si,"$$segVideo2 = %d\n",offs);
           fclose(si);
         }
       }

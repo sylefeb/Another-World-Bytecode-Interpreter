@@ -29,8 +29,8 @@
 
 #include <iostream>
 
-bool g_extracting = false; // SL: set to true by main if extracting a part
-                           //     this is used to auto-stop execution
+bool g_extracting  = false;  // SL: set to true by main if extracting a part
+                             //     this is used to auto-stop execution
 
 // #define NO_VIDEO
 #define NO_MUSIC

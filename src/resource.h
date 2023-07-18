@@ -92,7 +92,7 @@ struct Resource {
 	uint8_t *segPalettes;
 	uint8_t *segBytecode;
 	uint8_t *segCinematic;
-	uint8_t *_segVideo2;
+	uint8_t *_segVideo2 = NULL;
 
 	Resource(Video *vid, const char *dataDir);
 

@@ -25,16 +25,19 @@
 static const char *USAGE =
 	"Raw - Another World Interpreter\n"
 	"Usage: raw [OPTIONS]...\n"
-	"  --datapath=PATH   Path to where the game is installed (default '.')\n"
-	"  --savepath=PATH   Path to where the save files are stored (default '.')\n"
-  "  --extract=INT     Part id to extract\n"
+	"  --datapath=PATH    Path to where the game is installed (default '.')\n"
+	"  --savepath=PATH    Path to where the save files are stored (default '.')\n"
+  "  --extract=INT      Part id to extract\n"
+  "  --data-offsets     Store data offsets at the start of data pack\n"
   ;
 
 static bool parseOption(const char *arg, const char *longCmd, const char **opt) {
 	bool ret = false;
 	if (arg[0] == '-' && arg[1] == '-') { // tests for '--'
 		if (strncmp(arg + 2, longCmd, strlen(longCmd)) == 0) { // tests vs longCmd
-			*opt = arg + 2 + strlen(longCmd);
+      if (opt) {
+			  *opt = arg + 2 + strlen(longCmd);
+      }
 			ret  = true; // got it
 		}
 	}
@@ -48,6 +51,7 @@ static bool parseOption(const char *arg, const char *longCmd, const char **opt) 
 //extern System *System_SDL_create();
 extern System *stub ;//= System_SDL_create();
 extern bool g_extracting;
+extern bool g_data_offsets;
 
 // #undef main
 int main(int argc, char *argv[]) {
@@ -61,6 +65,10 @@ int main(int argc, char *argv[]) {
 			opt |= parseOption(argv[i], "savepath=", &savePath);
       if (parseOption(argv[i], "extract=",  &partId)) {
         g_extracting = true;
+        opt |= true;
+      }
+      if (parseOption(argv[i], "data-offsets",  NULL)) {
+        g_data_offsets = true;
         opt |= true;
       }
 		}
